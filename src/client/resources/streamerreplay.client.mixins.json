@@ -10,7 +10,9 @@
 		"ConnectionMixin",
 		"DeltaTrackerTimerMixin",
 		"GameRendererMixin",
-		"MinecraftMixin"
+		"MinecraftMixin",
+		"TextureManagerMixin",
+		"ToastManagerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

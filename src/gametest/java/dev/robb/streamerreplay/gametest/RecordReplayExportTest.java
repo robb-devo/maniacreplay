@@ -32,12 +32,6 @@ import java.util.stream.Stream;
  * and export it to MP4 with ffmpeg. Screenshots are written for every step.
  */
 public final class RecordReplayExportTest implements FabricClientGameTest {
-	/**
-	 * The gametest framework only runs test code on frames that tick. A finished export leaves the replay paused
-	 * (no ticks), so while this flag is set a per-frame screen callback nudges the replay clock.
-	 */
-	private static volatile boolean KEEP_TICKING;
-
 	/** Run with -PgametestLang=de_de to test the German UI (screenshots and label fit). */
 	private static final String LANGUAGE = System.getProperty("streamerreplay.gametest.lang", "en_us");
 	private static final String WORLD_NAME = "Prüfwelt Äöü ß";
@@ -94,20 +88,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(problems.isEmpty(), "labels overflow on " + where + ": " + problems);
 	}
 
-	private static void installTickNudge() {
-		net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
-			net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.beforeExtract(screen).register((sc, g, mx, my, a) -> {
-				ReplaySession s = ReplayManager.session();
-				if (KEEP_TICKING && !VideoExporter.isExporting() && s != null && !s.clock().isPlaying()) {
-					s.clock().setSpeed(0.25);
-					s.clock().setPlaying(true);
-				}
-			}));
-	}
 	@Override
 	public void runTest(ClientGameTestContext ctx) {
 		ctx.waitForScreen(TitleScreen.class);
-		ctx.runOnClient(mc -> installTickNudge());
 		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
 
@@ -195,48 +178,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("07_after_seek_back");
 
-		// follow: aim the free camera at the pig, pick it like a left click would, then leave again.
-		// Near the end of the recording the pig is guaranteed to exist (it was summoned early on).
-		// Slow playback keeps the game ticking (a replay that reached its end pauses, and paused replays do not tick).
-		ctx.runOnClient(mc -> {
-			ReplayManager.session().clock().setSpeed(0.25);
-			ReplayManager.session().seek(duration * 0.85);
-		});
-		waitCaughtUp(ctx);
-		ctx.waitTicks(5);
-		boolean picked = ctx.computeOnClient(mc -> {
-			ReplaySession s = ReplayManager.session();
-			net.minecraft.world.entity.Entity pig = null;
-			for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
-				if (e.getType() == net.minecraft.world.entity.EntityTypes.PIG) {
-					pig = e;
-				}
-			}
-			if (pig == null) {
-				StreamerReplay.LOGGER.error("[gametest] no pig in the replay world");
-				return false;
-			}
-			Vec3 target = pig.getBoundingBox().getCenter();
-			Vec3 eye = target.add(0.3, 4, 0.3); // from above: nothing can stand between camera and pig
-			Vec3 d = target.subtract(eye);
-			float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
-			float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)));
-			s.camera().setPose(new CameraState(eye.x, eye.y, eye.z, yaw, pitch, 0, 70));
-			net.minecraft.world.entity.Entity hit = dev.robb.streamerreplay.replay.EntityPicker.pick(mc, mc.player, s.camera());
-			if (hit != pig) {
-				StreamerReplay.LOGGER.error("[gametest] pick hit {} instead of {}", hit, pig);
-				return false;
-			}
-			s.camera().follow(mc, pig);
-			return true;
-		});
-		check(picked, "camera ray should pick the recorded pig");
-		ctx.waitTicks(20);
-		check(ctx.computeOnClient(mc -> mc.getCameraEntity() != mc.player), "should be following the pig");
-		ctx.takeScreenshot("07b_following_entity");
-		ctx.runOnClient(mc -> ReplayManager.session().camera().stopFollowing(mc));
-		ctx.waitTicks(2);
-		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == mc.player), "should be back in free camera");
+		pausedInteraction(ctx, duration);
 
 		// Esc in a replay opens the replay menu instead of the vanilla pause menu
 		ctx.runOnClient(mc -> mc.pauseGame(false));
@@ -245,10 +187,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			&& mc.gui.screen().getClass().getSimpleName().equals("ReplayPauseScreen")), "Esc should open the replay menu");
 		ctx.takeScreenshot("07c_replay_menu");
 		checkLabelsFit(ctx, "replay menu");
-		ctx.runOnClient(mc -> {
-			mc.gui.setScreen(null);
-			ReplayManager.session().clock().setSpeed(1);
-		});
+		ctx.runOnClient(mc -> mc.gui.setScreen(null));
 		ctx.waitTicks(2);
 
 		// camera path: three keyframes around the build
@@ -293,7 +232,6 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0), true);
 			var progress = new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session()));
 			mc.gui.setScreen(progress);
-			KEEP_TICKING = true;
 		});
 		ctx.waitTicks(20);
 		ctx.takeScreenshot("10_export_progress");
@@ -315,7 +253,6 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			throw new AssertionError(e);
 		}
 
-		KEEP_TICKING = false;
 		ctx.runOnClient(mc -> ReplayManager.exit());
 		ctx.waitForScreen(ReplayBrowserScreen.class);
 		ctx.waitTicks(20);
@@ -394,6 +331,92 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(seesBlocks, "multiplayer replay should contain the placed redstone blocks");
 		ctx.runOnClient(mc -> ReplayManager.exit());
 		ctx.waitForScreen(ReplayBrowserScreen.class);
+	}
+
+	/**
+	 * With the replay paused, real input events (mouse movement, WASD, left click, Shift) must still look around,
+	 * fly, follow an entity and stop following. The test itself only advances on client ticks, so it also proves
+	 * that a paused replay keeps ticking its UI ("frozen ticks").
+	 */
+	private static void pausedInteraction(ClientGameTestContext ctx, double duration) {
+		// Near the end of the recording the pig is guaranteed to exist (it was summoned early on).
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.85));
+		waitCaughtUp(ctx);
+		ctx.runOnClient(mc -> ReplayManager.session().clock().setPlaying(false));
+		ctx.waitTicks(5);
+		double frozenAt = ctx.computeOnClient(mc -> ReplayManager.session().clock().timeMs());
+
+		float yawBefore = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose().yaw());
+		// Fabric's moveCursor only sets the absolute position, but with a grabbed mouse vanilla reads SDL's relative
+		// motion, so feed the same SDL motion event vanilla's event loop would deliver.
+		// (The first event after grabbing the mouse is ignored by vanilla, so send a zero move first.)
+		ctx.runOnClient(mc -> mc.mouseHandler.onMove(mc.getWindow().handle(), mc.mouseHandler.xpos(), mc.mouseHandler.ypos(), 0, 0));
+		ctx.runOnClient(mc -> mc.mouseHandler.onMove(mc.getWindow().handle(), mc.mouseHandler.xpos() + 150, mc.mouseHandler.ypos(), 150, 0));
+		ctx.waitTicks(3);
+		float yawAfter = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose().yaw());
+		StreamerReplay.LOGGER.info("[gametest] paused mouse look: yaw {} -> {}", yawBefore, yawAfter);
+		check(Math.abs(net.minecraft.util.Mth.wrapDegrees(yawAfter - yawBefore)) > 5, "mouse look should work while paused");
+
+		CameraState before = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose());
+		ctx.getInput().holdKeyFor(o -> o.keyUp, 15);
+		ctx.waitTicks(5);
+		CameraState after = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose());
+		double moved = Math.sqrt(Math.pow(after.x() - before.x(), 2) + Math.pow(after.z() - before.z(), 2));
+		StreamerReplay.LOGGER.info("[gametest] paused flight: moved {} blocks", String.format(java.util.Locale.ROOT, "%.2f", moved));
+		check(moved > 1, "W should move the camera while paused (moved " + moved + ")");
+
+		// aim at the pig from above (nothing can stand in between), then a real left click
+		boolean aimed = ctx.computeOnClient(mc -> {
+			net.minecraft.world.entity.Entity pig = findPig(mc);
+			if (pig == null) {
+				StreamerReplay.LOGGER.error("[gametest] no pig in the replay world");
+				return false;
+			}
+			Vec3 target = pig.getBoundingBox().getCenter();
+			Vec3 eye = target.add(0.3, 4, 0.3);
+			Vec3 d = target.subtract(eye);
+			float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
+			float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)));
+			CameraState aim = new CameraState(eye.x, eye.y, eye.z, yaw, pitch, 0, 70);
+			ReplayManager.session().camera().setPose(aim);
+			ReplayManager.session().camera().moveToPose(aim);
+			return true;
+		});
+		check(aimed, "the recorded pig should exist");
+		ctx.waitTicks(2);
+		ctx.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+		ctx.waitTicks(5);
+		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == findPig(mc)), "left click should follow the pig while paused");
+		ctx.takeScreenshot("07b_following_entity");
+
+		// onboarding toasts are not shown in a replay
+		boolean toastsHidden = ctx.computeOnClient(mc -> {
+			mc.gui.addSocialInteractionsToast();
+			net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),
+				net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.UNSECURE_SERVER_WARNING,
+				net.minecraft.network.chat.Component.literal("test"), null);
+			return mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.TutorialToast.class,
+				net.minecraft.client.gui.components.toasts.Toast.NO_TOKEN) == null
+				&& mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.SystemToast.class,
+				net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.UNSECURE_SERVER_WARNING) == null;
+		});
+		check(toastsHidden, "tutorial / unsecure-server toasts should be suppressed in a replay");
+
+		ctx.getInput().holdKeyFor(o -> o.keyShift, 3);
+		ctx.waitTicks(3);
+		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == mc.player), "Shift should return to the free camera");
+		double timeNow = ctx.computeOnClient(mc -> ReplayManager.session().clock().timeMs());
+		check(Math.abs(timeNow - frozenAt) < 1, "replay time should not move while paused: " + frozenAt + " -> " + timeNow);
+		ctx.runOnClient(mc -> ReplayManager.session().clock().setPlaying(true));
+	}
+
+	private static net.minecraft.world.entity.@org.jspecify.annotations.Nullable Entity findPig(net.minecraft.client.Minecraft mc) {
+		for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
+			if (e.getType() == net.minecraft.world.entity.EntityTypes.PIG) {
+				return e;
+			}
+		}
+		return null;
 	}
 
 	private static void key(ReplaySession s, CameraState pose) {

@@ -70,9 +70,9 @@ public final class ReplaySession {
 	private long ticksDone;
 	private double lastTicks;
 	private float partialTick;
-	private static final long UI_TICK_NANOS = 50_000_000L;
-	private long lastGameTickNanos = System.nanoTime();
-	private long lastUiTickNanos;
+	private static final long FROZEN_TICK_NANOS = 50_000_000L;
+	private long lastTickNanos = System.nanoTime();
+	private boolean frozenTick;
 	private float deltaTicks;
 
 	private ReplaySession(Path file, ZipFile zip, ReplayMeta meta, List<Marker> markers, Screen parent) {
@@ -197,22 +197,8 @@ public final class ReplaySession {
 				}
 			}
 			camera.update(mc, dtSeconds);
-			ReplayKeys.handleReplayKeys(mc, this); // per frame: works while paused, when no game ticks run
-			tickUiWhileFrozen(mc, now);
+			ReplayKeys.handleReplayKeys(mc, this); // per frame: instant response even at very slow speeds
 		}
-	}
-
-	/**
-	 * A paused (or very slow) replay runs no game ticks, and vanilla only ticks the open screen from the game
-	 * tick. Screens still need their 20 Hz tick (button states, text cursors), so drive it from real time here.
-	 */
-	private void tickUiWhileFrozen(Minecraft mc, long now) {
-		Screen screen = mc.gui.screen();
-		if (screen == null || now - lastGameTickNanos < UI_TICK_NANOS || now - lastUiTickNanos < UI_TICK_NANOS) {
-			return;
-		}
-		lastUiTickNanos = now;
-		screen.tick();
 	}
 
 	/** Delivers all frames up to {@code untilMs}, within a time budget unless {@code exact} is requested. */
@@ -278,8 +264,16 @@ public final class ReplaySession {
 
 	// ------------------------------------------------------------------------------------------------ ticks
 
-	/** Called from the DeltaTracker mixin: how many client ticks to run this frame, derived from replay time. */
+	/**
+	 * Called from the DeltaTracker mixin: how many client ticks to run this frame, derived from replay time.
+	 *
+	 * <p>When the replay is paused (or so slow that no replay tick is due), one "frozen" tick still runs every
+	 * 50 ms of real time. During a frozen tick the game counts as paused (see MinecraftMixin), exactly like the
+	 * vanilla pause menu in singleplayer: the world, entities and particles stand still, but screens, key
+	 * bindings, toasts and other mods' client tick handlers keep working.
+	 */
 	public int advanceTicks() {
+		long now = System.nanoTime();
 		double ticks = clock.timeMs() / 50.0;
 		long whole = (long) Math.floor(ticks);
 		long toRun = whole - ticksDone;
@@ -287,13 +281,28 @@ public final class ReplaySession {
 			toRun = 0; // time went backwards (restart): just re-anchor
 		}
 		ticksDone = whole;
-		if (toRun > 0) {
-			lastGameTickNanos = System.nanoTime();
-		}
 		deltaTicks = (float) Math.max(0, ticks - lastTicks);
 		lastTicks = ticks;
 		partialTick = (float) (ticks - whole);
-		return (int) Math.min(10, toRun);
+		if (toRun > 0) {
+			lastTickNanos = now;
+			frozenTick = false;
+			return (int) Math.min(10, toRun);
+		}
+		// Only fill in when real ticks are rare (paused, path waiting, below 0.5x); interleaving them with real
+		// ticks would make screens and chat tick faster than 20 Hz.
+		boolean ticksAreRare = pathPlayer == null ? !clock.isPlaying() || clock.speed() < 0.5 : pathPlayer.isExact() || pathPlayer.isWaitingForSeek();
+		frozenTick = ticksAreRare && now - lastTickNanos >= FROZEN_TICK_NANOS;
+		if (frozenTick) {
+			lastTickNanos = now;
+			return 1;
+		}
+		return 0;
+	}
+
+	/** True while the current client tick is a frozen tick (world paused, UI running). */
+	public boolean isFrozenTick() {
+		return frozenTick;
 	}
 
 	public float partialTick() {

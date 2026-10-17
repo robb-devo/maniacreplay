@@ -19,20 +19,33 @@ public final class EntityPicker {
 	private EntityPicker() {
 	}
 
-	/** Fabric pre-attack callback: attacking makes no sense in a replay, so swallow it there. */
+	/**
+	 * Fabric pre-attack callback: attacking makes no sense in a replay. A click that reaches vanilla's key
+	 * handling first (in a client tick) is turned into a follow here instead of being lost.
+	 */
 	public static boolean onAttack(Minecraft mc, LocalPlayer player, int clickCount) {
 		ReplaySession session = ReplayManager.session();
-		return session != null && session.isInWorld(mc);
+		if (session == null || !session.isInWorld(mc)) {
+			return false;
+		}
+		if (clickCount > 0) {
+			followUnderCrosshair(mc, session);
+		}
+		return true;
 	}
 
 	/** Per frame while a replay is shown (also while paused): a left click follows the entity under the crosshair. */
 	public static void handleClicks(Minecraft mc, ReplaySession session) {
 		while (mc.options.keyAttack.consumeClick()) {
-			if (mc.player != null && !ReplayCamera.isSpectatingOther(mc)) {
-				Entity target = pick(mc, mc.player, session.camera());
-				if (target != null) {
-					session.camera().follow(mc, target);
-				}
+			followUnderCrosshair(mc, session);
+		}
+	}
+
+	private static void followUnderCrosshair(Minecraft mc, ReplaySession session) {
+		if (mc.player != null && !ReplayCamera.isSpectatingOther(mc)) {
+			Entity target = pick(mc, mc.player, session.camera());
+			if (target != null) {
+				session.camera().follow(mc, target);
 			}
 		}
 	}
