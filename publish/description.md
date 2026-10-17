@@ -19,7 +19,7 @@ the clip *after* it happened, without having to plan for it.
 - **Free camera.** Fly anywhere. **Click any player or mob to follow them** (Shift returns to the free camera).
 - **Camera path editor** (**O**):
   - Add keyframes (**I**). Each one stores position, rotation, FOV and **camera roll**.
-  - Paths are smooth, previewed in real time and drawn in the world.
+  - Paths are smooth, drawn over the world while editing and previewed in real time.
 - **Video export to MP4** (H.264 via ffmpeg):
   - Rendered frame by frame, so the video is perfectly smooth even when your PC is not.
   - A progress screen shows the ETA and has a cancel button.
@@ -77,3 +77,10 @@ The only external program it starts is ffmpeg, and only when you export a video.
 ## License
 
 MIT, open source: https://github.com/robb-devo/streamer-replay-mod
+
+## 🛡 Is this safe?
+
+- **Open source.** The full code is on GitHub.
+- **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
+- **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
+  `008f12e943fc280da5d4c5276193c8c911cb4354bb03d8fc3d848e7c94801a40`

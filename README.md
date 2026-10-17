@@ -21,7 +21,7 @@ moment from any angle, fly cinematic camera paths and export them to MP4, all wi
 - **Camera path editor** (**O**):
   - Add keyframes with **I**. Each keyframe stores position, rotation, FOV and **roll**.
   - Catmull-Rom-style (non-uniform Hermite) splines give smooth motion even when keyframes are unevenly spaced.
-  - The path is drawn in the world, and you can preview it in real time.
+  - The path is drawn over the world while the editor is open, and you can preview it in real time.
   - Click a keyframe to jump to it. Delete removes it.
 - **Video export** to MP4 (H.264 through `libx264`, with an automatic MPEG-4 fallback):
   - Rendered frame by frame at a fixed FPS, so output is smooth even on a slow PC.
@@ -64,11 +64,14 @@ Files are stored in:
   game timer during replays, camera pose/FOV/roll, a post-render frame hook and the pause menu.
 - **Idle cost is near zero**. Every hook first checks one static field and returns immediately when no replay is open.
 - **Mod Menu** is an optional integration. It is loaded only when present.
-- **Sodium, Iris and Lithium** have **not been tested yet**. The mod avoids the rendering paths they replace:
+- **Sodium 0.9.3-beta.1, Lithium 0.26.2 and Mod Menu 21.0.0** were tested together with this mod. The full end-to-end
+  test passes with them installed (record, watch, seek, follow, camera path, MP4 export, dedicated-server recording).
+- **Iris 1.11.7** has **not been tested yet**. The test machine has no OpenGL driver, and Iris requires OpenGL.
+  The mod is designed to work with Iris:
   - The camera is driven through `Camera` injections.
-  - Frames are read back from the main render target after post effects.
-
-  Report problems with an exact mod list.
+  - The path preview is a 2D overlay that does not depend on the world renderer.
+  - Export reads back the final image after post effects.
+- Report problems with an exact mod list.
 - The original *ReplayMod* is marked as `breaks`, because both mods tap the same network pipeline.
 
 ## Known limitations
@@ -78,6 +81,33 @@ Files are stored in:
 - Replays are only compatible with the protocol version they were recorded with (they are tagged with it).
 - Seeking backwards rebuilds the world from the start, then fast-forwards. On long replays this takes a moment, and
   an overlay is shown while it runs.
+
+## Is this safe? How can I check?
+
+You don't need to take anyone's word for it:
+
+- **The source code is public.** Everything the mod does is in this repository, under the MIT license.
+  It contains no code from other replay mods.
+- **No internet access.** The mod makes **no network connections** of its own: no telemetry, no analytics,
+  no update checks, no downloads. It only reads and writes files in `.minecraft/replays` and
+  `.minecraft/replay_videos` (plus its config file).
+- **The only program it starts is ffmpeg**, on your own PC, and only when you click *Export Video*. You
+  install ffmpeg yourself and can choose its path in the settings.
+- **Scan the jar yourself.** Go to <https://www.virustotal.com>, choose *File*, and upload
+  `streamer-replay-mod-1.0.0.jar`. Dozens of virus scanners check it at once. You can also paste the checksum
+  below into VirusTotal's *Search* tab to see earlier scans of exactly this file.
+- **Make sure you have the original file.** Compare its SHA-256 checksum with the one published here and in
+  the release notes:
+  - **Windows** (PowerShell): `Get-FileHash streamer-replay-mod-1.0.0.jar -Algorithm SHA256`
+  - **macOS / Linux**: `shasum -a 256 streamer-replay-mod-1.0.0.jar` or `sha256sum streamer-replay-mod-1.0.0.jar`
+
+  ```
+  SHA-256 (streamer-replay-mod-1.0.0.jar)
+  008f12e943fc280da5d4c5276193c8c911cb4354bb03d8fc3d848e7c94801a40
+  ```
+
+  If the value differs, the file is not the official release. Delete it and download from the official
+  page (Modrinth, CurseForge or GitHub Releases).
 
 ## Building
 

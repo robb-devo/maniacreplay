@@ -24,7 +24,7 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 | `record` | Recording: tapping the network connection, timing, writing in the background, saving. |
 | `replay` | Playback: the fake connection, the replay clock, the free/follow camera, seeking. |
 | `path` | Camera paths: keyframes and the smooth curve between them. Pure maths with unit tests. |
-| `render` | Video export: rendering frame by frame and piping the frames to ffmpeg. Also draws the path preview in the world. |
+| `render` | Video export: rendering frame by frame and piping the frames to ffmpeg. Also draws the path preview. |
 | `library` | The replay folder: listing, renaming, deleting, crash recovery. |
 | `ui` | Every screen and HUD element (browser, editor, timeline, export, settings, REC badge). |
 | `input` | Keybinds. |
@@ -81,7 +81,9 @@ compatible (the game does its normal work, so render mods such as Sodium still a
   - FOV never overshoots.
 - `PathPlayer` moves the camera along the curve. It is used for the live preview and for export.
 - Paths are saved next to the replay as a small `.paths` file, so the replay itself is never modified.
-- `PathPreviewRenderer` draws the path in the world while the editor is open: a line, points and keyframe numbers.
+- `PathPreviewRenderer` draws the path over the world while the editor is open: a dotted curve, keyframe markers
+  and numbers. It projects the 3D path points through the current camera onto the screen, like a tiny
+  camera of its own. That works no matter which renderer or shader pack draws the world.
 
 ## Video export
 

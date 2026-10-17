@@ -88,6 +88,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 
 		ctx.setScreen(() -> new ReplayBrowserScreen(new TitleScreen()));
 		ctx.waitTicks(40);
+		ctx.runOnClient(mc -> mc.gui.toastManager().clear()); // clean gallery shots
+		ctx.waitTicks(2);
 		ctx.takeScreenshot("03_replay_browser");
 
 		ctx.setScreen(() -> new ReplayConfigScreen(new TitleScreen()));
@@ -239,6 +241,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		multiplayer(ctx);
 
 		ctx.setScreen(TitleScreen::new);
+		ctx.waitTicks(60);
+		ctx.runOnClient(mc -> mc.gui.toastManager().clear());
+		ctx.waitTicks(2);
+		ctx.takeScreenshot("15_title_screen_button");
 		StreamerReplay.LOGGER.info("[gametest] ALL CHECKS PASSED");
 	}
 
