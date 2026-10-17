@@ -27,6 +27,11 @@ public final class ReplayClock {
 		lastNanos = nowNanos;
 	}
 
+	/** Keeps the time where it is but consumes the elapsed real time (e.g. while the world is loading). */
+	public void hold(long nowNanos) {
+		lastNanos = nowNanos;
+	}
+
 	/** Moves by an exact amount (used for deterministic video export). */
 	public void step(double deltaMs) {
 		timeMs = Math.max(0, Math.min(durationMs, timeMs + deltaMs));

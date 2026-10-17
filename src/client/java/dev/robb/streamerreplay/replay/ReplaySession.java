@@ -76,6 +76,7 @@ public final class ReplaySession {
 		this.markers = markers;
 		this.parent = parent;
 		this.clock = new ReplayClock(Math.max(1, meta.durationMs));
+		this.clock.setPlaying(true); // opening a replay starts watching it right away
 		loadPath();
 	}
 
@@ -152,17 +153,20 @@ public final class ReplaySession {
 			ReplayManager.onSessionLost(this);
 			return;
 		}
+		boolean worldVisible = isInWorld(mc) && !(mc.gui.screen() instanceof LevelLoadingScreen);
 		if (pathPlayer != null) {
 			pathPlayer.update(this, dtSeconds * 1000.0);
-		} else {
+		} else if (worldVisible) {
 			clock.update(now);
+		} else {
+			clock.hold(now); // do not run away while the world is still being built
 		}
 		if (isInWorld(mc) && clock.timeMs() < deliveredUntil - 1) {
 			restart();
 			return;
 		}
 		deliver((long) Math.floor(clock.timeMs()), pathPlayer != null && pathPlayer.isExact() && !pathPlayer.isWaitingForSeek());
-		if (isInWorld(mc) && !(mc.gui.screen() instanceof LevelLoadingScreen)) {
+		if (worldVisible) {
 			enforceSpectator(mc);
 			if (restorePose != null) {
 				camera.setPose(restorePose);

@@ -109,3 +109,15 @@ loom {
 		}
 	}
 }
+
+// Automated in-game tests (record -> replay -> export), run with ./gradlew runClientGameTest
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "streamerreplay-gametest"
+		enableGameTests = false
+		enableClientGameTests = true
+		eula = true
+		clearRunDirectory = true
+	}
+}

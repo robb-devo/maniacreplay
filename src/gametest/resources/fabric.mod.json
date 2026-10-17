@@ -1,0 +1,11 @@
+{
+	"schemaVersion": 1,
+	"id": "streamerreplay-gametest",
+	"version": "1.0.0",
+	"name": "Streamer Replay game tests",
+	"environment": "client",
+	"entrypoints": {
+		"fabric-client-gametest": ["dev.robb.streamerreplay.gametest.RecordReplayExportTest"]
+	},
+	"depends": {"streamerreplay": "*", "fabric-client-gametest-api-v1": "*"}
+}
