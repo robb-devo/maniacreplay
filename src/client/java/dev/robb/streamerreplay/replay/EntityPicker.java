@@ -19,19 +19,22 @@ public final class EntityPicker {
 	private EntityPicker() {
 	}
 
-	/** Fabric pre-attack callback. Returns true to swallow the attack while a replay is shown. */
+	/** Fabric pre-attack callback: attacking makes no sense in a replay, so swallow it there. */
 	public static boolean onAttack(Minecraft mc, LocalPlayer player, int clickCount) {
 		ReplaySession session = ReplayManager.session();
-		if (session == null || !session.isInWorld(mc)) {
-			return false;
-		}
-		if (clickCount > 0 && !ReplayCamera.isSpectatingOther(mc)) {
-			Entity target = pick(mc, player, session.camera());
-			if (target != null) {
-				session.camera().follow(mc, target);
+		return session != null && session.isInWorld(mc);
+	}
+
+	/** Per frame while a replay is shown (also while paused): a left click follows the entity under the crosshair. */
+	public static void handleClicks(Minecraft mc, ReplaySession session) {
+		while (mc.options.keyAttack.consumeClick()) {
+			if (mc.player != null && !ReplayCamera.isSpectatingOther(mc)) {
+				Entity target = pick(mc, mc.player, session.camera());
+				if (target != null) {
+					session.camera().follow(mc, target);
+				}
 			}
 		}
-		return true;
 	}
 
 	public static @Nullable Entity pick(Minecraft mc, LocalPlayer player, ReplayCamera camera) {

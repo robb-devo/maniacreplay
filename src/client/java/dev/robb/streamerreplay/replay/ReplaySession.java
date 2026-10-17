@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.replay;
 
+import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.PacketStreamReader;
@@ -68,6 +69,9 @@ public final class ReplaySession {
 	private long ticksDone;
 	private double lastTicks;
 	private float partialTick;
+	private static final long UI_TICK_NANOS = 50_000_000L;
+	private long lastGameTickNanos = System.nanoTime();
+	private long lastUiTickNanos;
 	private float deltaTicks;
 
 	private ReplaySession(Path file, ZipFile zip, ReplayMeta meta, List<Marker> markers, Screen parent) {
@@ -87,6 +91,12 @@ public final class ReplaySession {
 			ReplayMeta meta = ReplayArchive.readMeta(zip);
 			if (meta.formatVersion > ReplayFormat.FORMAT_VERSION) {
 				throw new IOException("This replay was made with a newer version of Streamer Replay");
+			}
+			int protocol = net.minecraft.SharedConstants.getCurrentVersion().protocolVersion();
+			if (meta.protocolVersion != 0 && meta.protocolVersion != protocol) {
+				// Packets are stored exactly as the server sent them; another protocol cannot be decoded safely.
+				throw new IOException("Recorded with Minecraft " + meta.minecraftVersion + " (protocol " + meta.protocolVersion
+					+ "), this game uses protocol " + protocol);
 			}
 			return new ReplaySession(file, zip, meta, ReplayArchive.readMarkers(zip), parent);
 		} catch (IOException | RuntimeException e) {
@@ -187,7 +197,22 @@ public final class ReplaySession {
 				}
 			}
 			camera.update(mc, dtSeconds);
+			ReplayKeys.handleReplayKeys(mc, this); // per frame: works while paused, when no game ticks run
+			tickUiWhileFrozen(mc, now);
 		}
+	}
+
+	/**
+	 * A paused (or very slow) replay runs no game ticks, and vanilla only ticks the open screen from the game
+	 * tick. Screens still need their 20 Hz tick (button states, text cursors), so drive it from real time here.
+	 */
+	private void tickUiWhileFrozen(Minecraft mc, long now) {
+		Screen screen = mc.gui.screen();
+		if (screen == null || now - lastGameTickNanos < UI_TICK_NANOS || now - lastUiTickNanos < UI_TICK_NANOS) {
+			return;
+		}
+		lastUiTickNanos = now;
+		screen.tick();
 	}
 
 	/** Delivers all frames up to {@code untilMs}, within a time budget unless {@code exact} is requested. */
@@ -262,6 +287,9 @@ public final class ReplaySession {
 			toRun = 0; // time went backwards (restart): just re-anchor
 		}
 		ticksDone = whole;
+		if (toRun > 0) {
+			lastGameTickNanos = System.nanoTime();
+		}
 		deltaTicks = (float) Math.max(0, ticks - lastTicks);
 		lastTicks = ticks;
 		partialTick = (float) (ticks - whole);

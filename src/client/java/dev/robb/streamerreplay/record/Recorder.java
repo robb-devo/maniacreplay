@@ -160,10 +160,17 @@ public final class Recorder {
 
 	Marker addMarker(String name) {
 		Marker marker = new Marker(clock.now(), name);
+		byte[] json;
 		synchronized (markers) {
 			markers.add(marker);
-			writeSidecar(ReplayFormat.MARKERS_SIDECAR_EXTENSION, ReplayArchive.toJson(markers));
+			json = ReplayArchive.toJson(markers);
 		}
+		// Disk I/O off the render thread. The saver is single-threaded, so this always lands before finish().
+		RecordingManager.saver().execute(() -> {
+			if (!stopped) {
+				writeSidecar(ReplayFormat.MARKERS_SIDECAR_EXTENSION, json);
+			}
+		});
 		return marker;
 	}
 

@@ -121,3 +121,11 @@ fabricApi {
 		clearRunDirectory = true
 	}
 }
+
+// Compatibility run: ./gradlew runClientGameTest -PcompatMods=/path/a.jar,/path/b.jar
+// Loads extra mods (e.g. Sodium, Iris, Lithium, Mod Menu) into the end-to-end client test.
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+	if (project.hasProperty("compatMods")) {
+		jvmArgs("-Dfabric.addMods=" + project.property("compatMods").toString().replace(",", File.pathSeparator))
+	}
+}

@@ -3,7 +3,6 @@ package dev.robb.streamerreplay.input;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.record.RecordingManager;
-import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.ReplayEditorScreen;
@@ -37,7 +36,7 @@ public final class ReplayKeys {
 	public static void register() {
 	}
 
-	/** End of every client tick; key presses only arrive here while no screen is open. */
+	/** End of every client tick: recording keys (these work in any world). */
 	public static void handle(Minecraft mc) {
 		while (MARKER.consumeClick()) {
 			RecordingManager.addMarker();
@@ -49,32 +48,30 @@ public final class ReplayKeys {
 				Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), null);
 			}
 		}
-		ReplaySession session = ReplayManager.session();
-		boolean inReplay = session != null && session.isInWorld(mc);
+	}
+
+	/**
+	 * Every frame while a replay world is shown. Driven per frame rather than per tick because a paused replay
+	 * runs no game ticks, and K must still be able to resume it. Key presses only arrive while no screen is open.
+	 */
+	public static void handleReplayKeys(Minecraft mc, ReplaySession session) {
+		dev.robb.streamerreplay.replay.EntityPicker.handleClicks(mc, session);
 		while (PLAY_PAUSE.consumeClick()) {
-			if (inReplay) {
-				togglePlayback(session);
-			}
+			togglePlayback(session);
 		}
 		while (EDITOR.consumeClick()) {
-			if (inReplay && mc.gui.screen() == null) {
+			if (mc.gui.screen() == null) {
 				mc.gui.setScreen(new ReplayEditorScreen(session));
 			}
 		}
 		while (KEYFRAME.consumeClick()) {
-			if (inReplay) {
-				addKeyframe(session);
-			}
+			addKeyframe(session);
 		}
 		while (SEEK_BACK.consumeClick()) {
-			if (inReplay) {
-				session.seek(Math.max(0, session.clock().timeMs() - SEEK_STEP_MS));
-			}
+			session.seek(Math.max(0, session.clock().timeMs() - SEEK_STEP_MS));
 		}
 		while (SEEK_FORWARD.consumeClick()) {
-			if (inReplay) {
-				session.seek(Math.min(session.clock().durationMs(), session.clock().timeMs() + SEEK_STEP_MS));
-			}
+			session.seek(Math.min(session.clock().durationMs(), session.clock().timeMs() + SEEK_STEP_MS));
 		}
 	}
 

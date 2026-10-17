@@ -115,7 +115,15 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("07_after_seek_back");
 
-		// follow: aim the free camera at the pig, pick it like a left click would, then leave again
+		// follow: aim the free camera at the pig, pick it like a left click would, then leave again.
+		// Near the end of the recording the pig is guaranteed to exist (it was summoned early on).
+		// Slow playback keeps the game ticking (a replay that reached its end pauses, and paused replays do not tick).
+		ctx.runOnClient(mc -> {
+			ReplayManager.session().clock().setSpeed(0.25);
+			ReplayManager.session().seek(duration * 0.85);
+		});
+		waitCaughtUp(ctx);
+		ctx.waitTicks(5);
 		boolean picked = ctx.computeOnClient(mc -> {
 			ReplaySession s = ReplayManager.session();
 			net.minecraft.world.entity.Entity pig = null;
@@ -125,6 +133,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				}
 			}
 			if (pig == null) {
+				StreamerReplay.LOGGER.error("[gametest] no pig in the replay world");
 				return false;
 			}
 			Vec3 target = pig.getBoundingBox().getCenter();
@@ -155,7 +164,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(ctx.computeOnClient(mc -> mc.gui.screen() != null
 			&& mc.gui.screen().getClass().getSimpleName().equals("ReplayPauseScreen")), "Esc should open the replay menu");
 		ctx.takeScreenshot("07c_replay_menu");
-		ctx.runOnClient(mc -> mc.gui.setScreen(null));
+		ctx.runOnClient(mc -> {
+			mc.gui.setScreen(null);
+			ReplayManager.session().clock().setSpeed(1);
+		});
 		ctx.waitTicks(2);
 
 		// camera path: three keyframes around the build
