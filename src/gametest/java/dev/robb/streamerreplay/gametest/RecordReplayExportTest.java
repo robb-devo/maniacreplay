@@ -262,14 +262,22 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(mp != null, "multiplayer replay should be listed with singleplayer=false");
 		StreamerReplay.LOGGER.info("[gametest] multiplayer recording {}", mp);
 
-		ctx.runOnClient(mc -> ReplayManager.open(mp, new ReplayBrowserScreen(new TitleScreen())));
+		// This recording is short: play slowly so it does not reach its end (and pause) while the test waits.
+		ctx.runOnClient(mc -> {
+			ReplayManager.open(mp, new ReplayBrowserScreen(new TitleScreen()));
+			ReplayManager.session().clock().setSpeed(0.25);
+		});
 		waitOrDump(ctx, "mp replay open", mc -> {
 			ReplaySession s = ReplayManager.session();
 			return s != null && s.isCaughtUp(mc) && mc.gui.screen() == null;
 		}, 20 * 60);
-		ctx.runOnClient(mc -> ReplayManager.session().seek(ReplayManager.session().clock().durationMs() - 300));
+		ctx.runOnClient(mc -> {
+			ReplayManager.session().clock().setSpeed(0.1);
+			// 1.5 s of replay at 0.1x leaves 30 game ticks before the end; the checks below need fewer.
+			ReplayManager.session().seek(ReplayManager.session().clock().durationMs() - 1500);
+		});
 		waitCaughtUp(ctx);
-		ctx.waitTicks(20);
+		ctx.waitTicks(4);
 		boolean seesBlocks = ctx.computeOnClient(mc -> {
 			Vec3 p = mc.player.position();
 			var pos = net.minecraft.core.BlockPos.containing(p.x + 4, p.y + 1, p.z + 4);
