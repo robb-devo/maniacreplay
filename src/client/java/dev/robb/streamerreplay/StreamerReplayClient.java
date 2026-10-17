@@ -15,6 +15,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
+import dev.robb.streamerreplay.replay.EntityPicker;
 
 /** Client entrypoint: wires the modules together. Everything else is event driven and idle until needed. */
 public final class StreamerReplayClient implements ClientModInitializer {
@@ -32,6 +34,7 @@ public final class StreamerReplayClient implements ClientModInitializer {
 			ReplayKeys.handle(mc);
 		});
 		ScreenEvents.AFTER_INIT.register(TitleScreenButton::onScreenInit);
+		ClientPreAttackCallback.EVENT.register(EntityPicker::onAttack);
 		LevelExtractionEvents.AFTER_BLOCK_OUTLINE_EXTRACTION.register((context, hit) -> PathPreviewRenderer.extract());
 
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> RecoveryService.recoverAsync());

@@ -45,7 +45,7 @@
   "streamerreplay.hud.seeking": "Springe… %s%%",
   "streamerreplay.hud.path_preview": "Kamerafahrt-Vorschau · %s zum Stoppen",
   "streamerreplay.hud.following": "Folge %s · %s zum Verlassen",
-  "streamerreplay.hud.hint": "%s Abspielen/Pause · %s Editor · %s/%s ±5s · Esc Menü",
+  "streamerreplay.hud.hint": "%s Abspielen/Pause · %s Editor · %s/%s ±5s · Klick: folgen · Esc Menü",
   "streamerreplay.pause.title": "Replay",
   "streamerreplay.pause.resume": "Zurück zum Replay",
   "streamerreplay.pause.editor": "Editor öffnen",

@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.ui;
 
+import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -11,9 +12,11 @@ import net.minecraft.network.chat.Component;
 /** Replaces the vanilla pause menu while watching a replay. Pausing the game here does not stop the replay clock. */
 public final class ReplayPauseScreen extends Screen {
 	private final ReplaySession session;
+	private final Component replayName;
 
 	public ReplayPauseScreen(ReplaySession session) {
 		super(Component.translatable("streamerreplay.pause.title"));
+		this.replayName = Component.literal(ReplayLibrary.displayName(session.file()));
 		this.session = session;
 	}
 
@@ -39,8 +42,7 @@ public final class ReplayPauseScreen extends Screen {
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
 		super.extractRenderState(g, mouseX, mouseY, a);
 		g.centeredText(font, title, width / 2, height / 4 + 8, Theme.TEXT);
-		String name = session.file().getFileName().toString();
-		g.centeredText(font, Component.literal(name), width / 2, height / 4 + 18, Theme.TEXT_DIM);
+		g.centeredText(font, replayName, width / 2, height / 4 + 18, Theme.TEXT_DIM);
 	}
 
 	@Override

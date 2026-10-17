@@ -61,6 +61,7 @@ public final class ExportProgressScreen extends Screen {
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
 		int cx = width / 2;
 		int cy = height / 2;
+		updateButtons(); // state changes come from the encoder thread; reflect them immediately
 		Theme.panel(g, cx - 170, cy - 50, cx + 170, cy + 58);
 		super.extractRenderState(g, mouseX, mouseY, a);
 		VideoExporter exporter = VideoExporter.current();

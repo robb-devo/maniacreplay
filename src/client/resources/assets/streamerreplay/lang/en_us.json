@@ -45,7 +45,7 @@
   "streamerreplay.hud.seeking": "Jumping… %s%%",
   "streamerreplay.hud.path_preview": "Camera path preview · %s to stop",
   "streamerreplay.hud.following": "Following %s · %s to leave",
-  "streamerreplay.hud.hint": "%s Play/Pause · %s Editor · %s/%s ±5s · Esc Menu",
+  "streamerreplay.hud.hint": "%s Play/Pause · %s Editor · %s/%s ±5s · Click: follow · Esc Menu",
   "streamerreplay.pause.title": "Replay",
   "streamerreplay.pause.resume": "Back to Replay",
   "streamerreplay.pause.editor": "Open Editor",

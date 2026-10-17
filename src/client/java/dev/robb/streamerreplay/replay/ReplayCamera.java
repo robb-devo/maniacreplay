@@ -13,6 +13,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
+import java.util.UUID;
+
 /**
  * The replay camera. Moves every rendered frame (not every tick), so it stays perfectly smooth and keeps
  * working while the replay is paused or slowed down.
@@ -34,6 +36,7 @@ public final class ReplayCamera {
 	private double vz;
 	private @Nullable CameraState pathPose;
 	private boolean initialized;
+	private @Nullable UUID followUuid;
 
 	/** Places the camera at the eyes of the given entity (on spawn and when leaving spectate mode). */
 	public void moveTo(Entity entity) {
@@ -50,13 +53,20 @@ public final class ReplayCamera {
 	 * instead of inside their head.
 	 */
 	private void placeBehind(LocalPlayer player, Minecraft mc) {
-		moveTo(player);
-		double yaw = Math.toRadians(player.getYRot());
+		placeBehind(player, player);
+		fov = mc.options.fov().get();
+	}
+
+	/** Puts the camera a few blocks behind and above {@code anchor}, looking the same way, slightly down. */
+	private void placeBehind(Entity anchor, LocalPlayer player) {
+		moveTo(anchor);
+		float yawDeg = anchor.getYRot();
+		double yaw = Math.toRadians(yawDeg);
 		x += Math.sin(yaw) * 3.5;
 		z -= Math.cos(yaw) * 3.5;
 		y += 1.2;
+		player.setYRot(yawDeg);
 		player.setXRot(18);
-		fov = mc.options.fov().get();
 	}
 
 	/** Moves the camera to a pose without touching rotation smoothing state. */
@@ -122,6 +132,35 @@ public final class ReplayCamera {
 		this.fov = Mth.clamp(fov, 10, 150);
 	}
 
+	/** Watches the world through the eyes of {@code target} until Shift is pressed. */
+	public void follow(Minecraft mc, Entity target) {
+		followUuid = target.getUUID();
+		mc.setCameraEntity(target);
+	}
+
+	public void stopFollowing(Minecraft mc) {
+		followUuid = null;
+		if (mc.player != null) {
+			Entity target = mc.getCameraEntity();
+			if (target != null && target != mc.player) {
+				placeBehind(target, mc.player); // continue from just behind the followed entity
+			}
+			mc.setCameraEntity(mc.player);
+		}
+	}
+
+	private void reacquireFollowTarget(Minecraft mc) {
+		if (mc.level == null) {
+			return;
+		}
+		for (Entity entity : mc.level.entitiesForRendering()) {
+			if (followUuid.equals(entity.getUUID()) && entity != mc.player) {
+				mc.setCameraEntity(entity);
+				return;
+			}
+		}
+	}
+
 	/** Whether vanilla should render from another entity's eyes (spectate mode). */
 	public static boolean isSpectatingOther(Minecraft mc) {
 		Entity cameraEntity = mc.getCameraEntity();
@@ -137,12 +176,14 @@ public final class ReplayCamera {
 		if (!initialized) {
 			placeBehind(player, mc);
 		}
+		if (followUuid != null && !isSpectatingOther(mc)) {
+			reacquireFollowTarget(mc); // e.g. after a seek rebuilt the world
+		}
 		if (isSpectatingOther(mc)) {
 			Entity target = mc.getCameraEntity();
-			if (mc.gui.screen() == null && mc.options.keyShift.isDown()) {
-				mc.setCameraEntity(player);
-			}
-			if (target != null) {
+			if ((mc.gui.screen() == null && mc.options.keyShift.isDown()) || target == null || target.isRemoved()) {
+				stopFollowing(mc);
+			} else {
 				moveTo(target);
 			}
 			syncPlayer(player);

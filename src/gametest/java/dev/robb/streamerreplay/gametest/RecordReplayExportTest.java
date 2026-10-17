@@ -113,6 +113,48 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("07_after_seek_back");
 
+		// follow: aim the free camera at the pig, pick it like a left click would, then leave again
+		boolean picked = ctx.computeOnClient(mc -> {
+			ReplaySession s = ReplayManager.session();
+			net.minecraft.world.entity.Entity pig = null;
+			for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
+				if (e.getType() == net.minecraft.world.entity.EntityTypes.PIG) {
+					pig = e;
+				}
+			}
+			if (pig == null) {
+				return false;
+			}
+			Vec3 target = pig.getBoundingBox().getCenter();
+			Vec3 eye = target.add(-5, 2, -5);
+			Vec3 d = target.subtract(eye);
+			float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
+			float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)));
+			s.camera().setPose(new CameraState(eye.x, eye.y, eye.z, yaw, pitch, 0, 70));
+			net.minecraft.world.entity.Entity hit = dev.robb.streamerreplay.replay.EntityPicker.pick(mc, mc.player, s.camera());
+			if (hit != pig) {
+				return false;
+			}
+			s.camera().follow(mc, pig);
+			return true;
+		});
+		check(picked, "camera ray should pick the recorded pig");
+		ctx.waitTicks(20);
+		check(ctx.computeOnClient(mc -> mc.getCameraEntity() != mc.player), "should be following the pig");
+		ctx.takeScreenshot("07b_following_entity");
+		ctx.runOnClient(mc -> ReplayManager.session().camera().stopFollowing(mc));
+		ctx.waitTicks(2);
+		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == mc.player), "should be back in free camera");
+
+		// Esc in a replay opens the replay menu instead of the vanilla pause menu
+		ctx.runOnClient(mc -> mc.pauseGame(false));
+		ctx.waitTicks(5);
+		check(ctx.computeOnClient(mc -> mc.gui.screen() != null
+			&& mc.gui.screen().getClass().getSimpleName().equals("ReplayPauseScreen")), "Esc should open the replay menu");
+		ctx.takeScreenshot("07c_replay_menu");
+		ctx.runOnClient(mc -> mc.gui.setScreen(null));
+		ctx.waitTicks(2);
+
 		// camera path: three keyframes around the build
 		Vec3 b = base;
 		ctx.runOnClient(mc -> {
