@@ -43,11 +43,16 @@ public final class ReplayKeys {
 			RecordingManager.addMarker();
 		}
 		while (STOP_RECORDING.consumeClick()) {
-			if (RecordingManager.isRecording()) {
-				RecordingManager.stopActive();
-			} else {
-				Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), null);
-			}
+			stopRecordingPressed(mc);
+		}
+	}
+
+	/** The "Stop Recording" key: stops, or explains how to start a recording when none is running. */
+	public static void stopRecordingPressed(Minecraft mc) {
+		if (RecordingManager.isRecording()) {
+			RecordingManager.stopActive();
+		} else {
+			Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), RecordingManager.notRecordingHint(mc));
 		}
 	}
 

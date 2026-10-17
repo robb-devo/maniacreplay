@@ -46,7 +46,7 @@ public final class RecoveryService {
 			StreamerReplay.LOGGER.warn("Could not scan for unfinished recordings", e);
 		}
 		if (recovered > 0) {
-			Notifications.recording(Component.translatable("streamerreplay.toast.recovered", recovered), null);
+			Notifications.recording(recovered == 1 ? Component.translatable("streamerreplay.toast.recovered.one") : Component.translatable("streamerreplay.toast.recovered", recovered), null);
 		}
 		return recovered;
 	}

@@ -183,10 +183,27 @@ public final class RecordingManager {
 	}
 
 	/** Adds a marker at the current recording time. */
+	/**
+	 * Why nothing is being recorded, for the "not recording" toast. Joining in the middle is not supported on
+	 * purpose: a replay needs the world exactly as the server sent it at login (registries, chunks, entities), and
+	 * re-creating that from the client's partial copy would produce replays that look right but break on seeking.
+	 * So the honest answer is to tell the player how to start one.
+	 */
+	public static @Nullable Component notRecordingHint(Minecraft mc) {
+		if (mc.level == null || ReplayManager.isActive()) {
+			return null;
+		}
+		ReplayConfig config = ReplayConfig.get();
+		if (mc.isLocalServer() ? !config.recordSingleplayer : !config.recordMultiplayer) {
+			return Component.translatable(mc.isLocalServer() ? "streamerreplay.toast.not_recording.off_singleplayer" : "streamerreplay.toast.not_recording.off_servers");
+		}
+		return Component.translatable("streamerreplay.toast.not_recording.rejoin");
+	}
+
 	public static void addMarker() {
 		Recorder recorder = active;
 		if (recorder == null || recorder.isStopped()) {
-			Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), null);
+			Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), notRecordingHint(Minecraft.getInstance()));
 			return;
 		}
 		Marker marker = recorder.addMarker(Component.translatable("streamerreplay.marker.default", recorder.markerCount() + 1).getString());

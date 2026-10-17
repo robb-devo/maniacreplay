@@ -4,6 +4,7 @@ import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.library.RecoveryService;
 import dev.robb.streamerreplay.record.RecordingManager;
+import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.TitleScreenButton;
 import dev.robb.streamerreplay.ui.hud.RecordingIndicatorHud;
 import dev.robb.streamerreplay.ui.hud.ReplayHud;
@@ -30,6 +31,7 @@ public final class StreamerReplayClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			RecordingManager.tick(mc);
 			ReplayKeys.handle(mc);
+			Notifications.tick(mc);
 		});
 		ScreenEvents.AFTER_INIT.register(TitleScreenButton::onScreenInit);
 		ClientPreAttackCallback.EVENT.register(EntityPicker::onAttack);

@@ -88,8 +88,20 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(problems.isEmpty(), "labels overflow on " + where + ": " + problems);
 	}
 
+	/** "crash" / "recover" for the two halves of scripts/crash-recovery-test.sh; empty for the normal run. */
+	private static final String MODE = System.getProperty("streamerreplay.gametest.mode", "");
+	private static final String CRASH_WORLD = "Absturz Test";
+
 	@Override
 	public void runTest(ClientGameTestContext ctx) {
+		if (MODE.equals("crash")) {
+			crashPhase(ctx);
+			return;
+		}
+		if (MODE.equals("recover")) {
+			recoverPhase(ctx);
+			return;
+		}
 		ctx.waitForScreen(TitleScreen.class);
 		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
@@ -122,6 +134,21 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			}
 			sp.getServer().runCommand(String.format("setblock %d %d %d minecraft:emerald_block", x, y + 3, z + 3));
 			ctx.waitTicks(40);
+			// stop with the key, press it again: the toast must explain how to record (joining mid-session is not supported)
+			ctx.runOnClient(dev.robb.streamerreplay.input.ReplayKeys::stopRecordingPressed);
+			ctx.waitFor(mc -> !RecordingManager.isRecording(), 100);
+			ctx.waitTicks(10);
+			ctx.runOnClient(mc -> mc.gui.toastManager().clear());
+			ctx.runOnClient(dev.robb.streamerreplay.input.ReplayKeys::stopRecordingPressed);
+			ctx.waitTicks(15);
+			String hint = ctx.computeOnClient(mc -> {
+				var toast = mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.SystemToast.class, dev.robb.streamerreplay.ui.Notifications.RECORDING);
+				var why = RecordingManager.notRecordingHint(mc);
+				return (toast == null ? "no toast" : "toast") + " " + (why == null ? "-" : ((net.minecraft.network.chat.contents.TranslatableContents) why.getContents()).getKey());
+			});
+			StreamerReplay.LOGGER.info("[gametest] not-recording hint: {}", hint);
+			check(hint.equals("toast streamerreplay.toast.not_recording.rejoin"), "pressing stop without a recording should explain how to record: " + hint);
+			ctx.takeScreenshot("02b_not_recording_hint");
 		}
 		// leaving the world stops and saves the recording in the background
 		Path recorded = waitForReplay(ctx);
@@ -341,6 +368,79 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	 * fly, follow an entity and stop following. The test itself only advances on client ticks, so it also proves
 	 * that a paused replay keeps ticking its UI ("frozen ticks").
 	 */
+	/**
+	 * First half of the crash test: record a world for a while, add a marker, then announce the point at which the
+	 * script kills the JVM with SIGKILL (no shutdown hooks, no save). The test never finishes on its own.
+	 */
+	private static void crashPhase(ClientGameTestContext ctx) {
+		ctx.waitForScreen(TitleScreen.class);
+		TestSingleplayerContext sp = ctx.worldBuilder().adjustSettings(s -> s.setName(CRASH_WORLD)).create();
+		sp.getConnection().waitForChunksRender();
+		check(ctx.computeOnClient(mc -> RecordingManager.isRecording()), "recording should start automatically");
+		Vec3 p = ctx.computeOnClient(mc -> mc.player.position());
+		sp.getServer().runCommand("time set noon");
+		sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:gold_block",
+			(int) p.x + 3, (int) p.y, (int) p.z + 3, (int) p.x + 5, (int) p.y + 3, (int) p.z + 5));
+		for (int i = 0; i < 16; i++) {
+			sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 2.5) * 3, p.y, p.z + Math.sin(i / 2.5) * 3, i * 22));
+			ctx.waitTicks(10);
+			if (i == 8) {
+				ctx.runOnClient(mc -> RecordingManager.addMarker());
+			}
+		}
+		ctx.waitTicks(40); // > the 1 s flush interval
+		Path rec = ctx.computeOnClient(mc -> RecordingManager.activeRecordingFile());
+		long size = 0;
+		try {
+			size = Files.size(rec);
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+		ctx.takeScreenshot("crash_01_recording_before_kill");
+		StreamerReplay.LOGGER.info("[gametest] CRASH-POINT recording {} ({} bytes on disk) - kill me now", rec.getFileName(), size);
+		ctx.waitTicks(20 * 600); // the script kills the game long before this ends
+		throw new AssertionError("the crash script did not kill the game");
+	}
+
+	/** Second half: a fresh start on the same game folder must turn the unfinished recording into a working replay. */
+	private static void recoverPhase(ClientGameTestContext ctx) {
+		ctx.waitForScreen(TitleScreen.class);
+		Path folder = ctx.computeOnClient(mc -> StreamerReplay.replayFolder());
+		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == 1 && list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 30);
+		Path replay = list(folder, ReplayFormat.EXTENSION).getFirst();
+		StreamerReplay.LOGGER.info("[gametest] recovered file: {}", replay.getFileName());
+		var info = ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().getFirst());
+		check(info.meta() != null && CRASH_WORLD.equals(info.meta().worldName), "metadata should survive the crash: " + info.meta());
+		StreamerReplay.LOGGER.info("[gametest] recovered meta: world={} duration={} ms markers={}", info.meta().worldName, info.meta().durationMs, info.markers());
+		check(info.markers() == 1, "the marker set before the crash should survive");
+		try (var leftovers = Files.list(folder)) {
+			java.util.List<String> names = leftovers.map(f -> f.getFileName().toString()).toList();
+			StreamerReplay.LOGGER.info("[gametest] replay folder after recovery: {}", names);
+			check(names.size() == 1, "sidecar files should be cleaned up after recovery: " + names);
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+		ctx.setScreen(() -> new ReplayBrowserScreen(new TitleScreen()));
+		ctx.waitTicks(30);
+		ctx.takeScreenshot("crash_02_recovered_in_browser");
+		ctx.runOnClient(mc -> ReplayManager.open(replay, new ReplayBrowserScreen(new TitleScreen())));
+		waitOrDump(ctx, "recovered replay open", mc -> {
+			ReplaySession s = ReplayManager.session();
+			return s != null && s.isCaughtUp(mc) && mc.gui.screen() == null;
+		}, 20 * 60);
+		double duration = ctx.computeOnClient(mc -> (double) ReplayManager.session().clock().durationMs());
+		StreamerReplay.LOGGER.info("[gametest] recovered replay plays, duration {} ms", duration);
+		check(duration > 5000, "recovered replay should contain the recorded time, was " + duration + " ms");
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.9));
+		waitCaughtUp(ctx);
+		ctx.waitTicks(20);
+		ctx.takeScreenshot("crash_03_recovered_replay_playing");
+		ctx.runOnClient(mc -> ReplayManager.exit());
+		ctx.waitForScreen(ReplayBrowserScreen.class);
+		ctx.setScreen(TitleScreen::new);
+		StreamerReplay.LOGGER.info("[gametest] CRASH RECOVERY CHECKS PASSED");
+	}
+
 	private static void pausedInteraction(ClientGameTestContext ctx, double duration) {
 		// Near the end of the recording the pig is guaranteed to exist (it was summoned early on).
 		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.85));

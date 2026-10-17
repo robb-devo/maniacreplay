@@ -118,8 +118,8 @@ fabricApi {
 		enableGameTests = false
 		enableClientGameTests = true
 		eula = true
-		// A shader-pack run prepares its own fresh run directory (see below).
-		clearRunDirectory = !project.hasProperty("shaderPack")
+		// Shader-pack and crash-recovery runs manage their own run directory (see below).
+		clearRunDirectory = !project.hasProperty("shaderPack") && !project.hasProperty("crashPhase")
 	}
 }
 
@@ -155,6 +155,23 @@ if (project.hasProperty("shaderPack")) {
 			java.nio.file.Files.copy(pack.toPath(), new File(runDir, "shaderpacks/" + pack.name).toPath())
 			new File(runDir, "config/iris.properties").text = "enableShaders=true\nshaderPack=" + pack.name + "\n"
 			new File(runDir, "eula.txt").text = "eula=true\n"
+		}
+	}
+}
+
+// Crash-recovery test (scripts/crash-recovery-test.sh): phase "crash" records in a fresh run directory until the
+// script kills the JVM with SIGKILL; phase "recover" starts again on the same directory and checks the recovery.
+if (project.hasProperty("crashPhase")) {
+	def runDir = layout.projectDirectory.dir("build/run/clientGameTest").asFile
+	def phase = project.property("crashPhase").toString()
+	tasks.matching { it.name == "runClientGameTest" }.configureEach {
+		jvmArgs("-Dstreamerreplay.gametest.mode=" + phase)
+		if (phase == "crash") {
+			doFirst {
+				runDir.deleteDir()
+				runDir.mkdirs()
+				new File(runDir, "eula.txt").text = "eula=true\n"
+			}
 		}
 	}
 }
