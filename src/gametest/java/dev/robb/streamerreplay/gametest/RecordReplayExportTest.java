@@ -625,7 +625,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			check(rendering == 1920, "the game should render at 1920 wide during the export, was " + rendering);
 			// resize while frames are really being captured (not during the world rebuild at the start)
 			ctx.waitFor(mc -> VideoExporter.current().framesDone() >= 10, 20 * 120);
-			ctx.takeScreenshot("10b_export_1080p_progress"); // the screenshot itself renders an extra frame at window size
+			// The harness screenshot renders one extra frame at window size with the 1080p GUI layout (so it looks
+			// cropped); it is not a gallery shot, it proves such foreign renders do not break the export.
+			ctx.takeScreenshot("zz_harness_extra_render_during_1080p_export");
 			ctx.getInput().resizeWindow(700, 520);
 			ctx.waitTicks(20);
 		});
