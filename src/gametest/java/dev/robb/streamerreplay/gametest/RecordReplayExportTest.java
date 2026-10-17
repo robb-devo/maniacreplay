@@ -16,6 +16,8 @@ import dev.robb.streamerreplay.ui.ReplayEditorScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerConnection;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.world.phys.Vec3;
 
@@ -126,13 +128,14 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				return false;
 			}
 			Vec3 target = pig.getBoundingBox().getCenter();
-			Vec3 eye = target.add(-5, 2, -5);
+			Vec3 eye = target.add(0.3, 4, 0.3); // from above: nothing can stand between camera and pig
 			Vec3 d = target.subtract(eye);
 			float yaw = (float) Math.toDegrees(Math.atan2(-d.x, d.z));
 			float pitch = (float) -Math.toDegrees(Math.atan2(d.y, Math.sqrt(d.x * d.x + d.z * d.z)));
 			s.camera().setPose(new CameraState(eye.x, eye.y, eye.z, yaw, pitch, 0, 70));
 			net.minecraft.world.entity.Entity hit = dev.robb.streamerreplay.replay.EntityPicker.pick(mc, mc.player, s.camera());
 			if (hit != pig) {
+				StreamerReplay.LOGGER.error("[gametest] pick hit {} instead of {}", hit, pig);
 				return false;
 			}
 			s.camera().follow(mc, pig);
@@ -212,7 +215,67 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(20);
 		ctx.takeScreenshot("12_back_in_browser");
 		ctx.setScreen(TitleScreen::new);
+
+		multiplayer(ctx);
+
+		ctx.setScreen(TitleScreen::new);
 		StreamerReplay.LOGGER.info("[gametest] ALL CHECKS PASSED");
+	}
+
+	/** Records on a real dedicated server (TCP, compression enabled) and plays that recording back. */
+	private static void multiplayer(ClientGameTestContext ctx) {
+		Path folder = ctx.computeOnClient(mc -> StreamerReplay.replayFolder());
+		int before = list(folder, ReplayFormat.EXTENSION).size();
+		java.util.Properties props = new java.util.Properties();
+		props.setProperty("network-compression-threshold", "64");
+		try (TestDedicatedServerContext server = ctx.worldBuilder().createServer(props)) {
+			try (TestDedicatedServerConnection connection = server.connect()) {
+				connection.waitForChunksRender();
+				check(ctx.computeOnClient(mc -> RecordingManager.isRecording()), "recording should start on a server too");
+				server.runCommand("time set noon");
+				server.runCommand("gamerule advance_time false");
+				Vec3 p = ctx.computeOnClient(mc -> mc.player.position());
+				int x = (int) Math.floor(p.x), y = (int) Math.floor(p.y), z = (int) Math.floor(p.z);
+				server.runCommand(String.format("fill %d %d %d %d %d %d minecraft:redstone_block", x + 3, y, z + 3, x + 5, y + 3, z + 5));
+				server.runCommand(String.format("summon minecraft:cow %d %d %d", x - 2, y, z + 5));
+				ctx.waitTicks(60);
+				ctx.takeScreenshot("13_multiplayer_recording");
+			}
+		}
+		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == before + 1
+			&& list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 30);
+		Path mp = ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().stream()
+			.filter(i -> i.meta() != null && !i.meta().singleplayer).map(dev.robb.streamerreplay.library.ReplayInfo::file)
+			.findFirst().orElse(null));
+		check(mp != null, "multiplayer replay should be listed with singleplayer=false");
+		StreamerReplay.LOGGER.info("[gametest] multiplayer recording {}", mp);
+
+		ctx.runOnClient(mc -> ReplayManager.open(mp, new ReplayBrowserScreen(new TitleScreen())));
+		waitOrDump(ctx, "mp replay open", mc -> {
+			ReplaySession s = ReplayManager.session();
+			return s != null && s.isCaughtUp(mc) && mc.gui.screen() == null;
+		}, 20 * 60);
+		ctx.runOnClient(mc -> ReplayManager.session().seek(ReplayManager.session().clock().durationMs() - 300));
+		waitCaughtUp(ctx);
+		ctx.waitTicks(20);
+		boolean seesBlocks = ctx.computeOnClient(mc -> {
+			Vec3 p = mc.player.position();
+			var pos = net.minecraft.core.BlockPos.containing(p.x + 4, p.y + 1, p.z + 4);
+			for (int dx = -10; dx <= 10; dx++) {
+				for (int dz = -10; dz <= 10; dz++) {
+					for (int dy = -6; dy <= 6; dy++) {
+						if (mc.level.getBlockState(pos.offset(dx, dy, dz)).is(net.minecraft.world.level.block.Blocks.REDSTONE_BLOCK)) {
+							return true;
+						}
+					}
+				}
+			}
+			return false;
+		});
+		ctx.takeScreenshot("14_multiplayer_replay");
+		check(seesBlocks, "multiplayer replay should contain the placed redstone blocks");
+		ctx.runOnClient(mc -> ReplayManager.exit());
+		ctx.waitForScreen(ReplayBrowserScreen.class);
 	}
 
 	private static void key(ReplaySession s, CameraState pose) {
