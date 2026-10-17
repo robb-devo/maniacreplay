@@ -136,6 +136,10 @@ tasks.matching { it.name == "runClientGameTest" }.configureEach {
 	if (project.hasProperty("gametestLang")) {
 		jvmArgs("-Dstreamerreplay.gametest.lang=" + project.property("gametestLang"))
 	}
+	// extra test switches: -PgametestProps=streamerreplay.gametest.x=true,other=1
+	if (project.hasProperty("gametestProps")) {
+		project.property("gametestProps").toString().split(",").each { jvmArgs("-D" + it) }
+	}
 }
 
 // Iris run: ./gradlew runClientGameTest -PcompatMods=...iris.jar,...sodium.jar -PshaderPack=/path/pack.zip

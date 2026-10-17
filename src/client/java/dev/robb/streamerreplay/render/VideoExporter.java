@@ -26,6 +26,9 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Renders the camera path frame by frame and streams the frames to ffmpeg.
  *
+ * <p>The game renders at the export resolution for the whole export ({@link RenderResolution}), so the video is
+ * native 1080p/1440p/4K regardless of the window, and resizing the window does not disturb it.
+ *
  * <p>Per frame: {@link #beforeFrame} advances the path by exactly 1/fps seconds (the session then delivers every
  * packet up to that moment), the world renders, and {@link #capture} copies the world image (no GUI) into a pooled
  * GPU buffer. When the copy completes the bytes are handed to the ffmpeg writer thread. If chunks are still
@@ -66,11 +69,35 @@ public final class VideoExporter {
 
 	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264) {
 		this.session = session;
-		this.settings = settings;
+		this.settings = withRenderSize(settings);
 		this.x264 = x264;
 		this.frameMs = 1000.0 / settings.fps();
 		this.totalFrames = (int) Math.floor(session.path().durationMs() / frameMs) + 1;
 		this.player = session.playPathForExport();
+	}
+
+	/**
+	 * Picks the render size: the requested resolution, or the current window size (rounded down to even numbers,
+	 * which H.264 needs). Sizes the GPU cannot render are scaled down here and back up by ffmpeg.
+	 */
+	private static ExportSettings withRenderSize(ExportSettings s) {
+		int w = s.outputWidth();
+		int h = s.outputHeight();
+		if (w <= 0 || h <= 0) {
+			com.mojang.blaze3d.platform.Window.FramebufferSize real = Minecraft.getInstance().getWindow().queryFramebufferSize();
+			w = Math.max(2, real.width() & ~1);
+			h = Math.max(2, real.height() & ~1);
+		}
+		return new ExportSettings(s.output(), s.ffmpeg(), s.fps(), s.quality(), w, h, s.cleanFrames());
+	}
+
+	private static int[] gpuRenderSize(int w, int h) {
+		int max = RenderResolution.maxSize();
+		if (w <= max && h <= max) {
+			return new int[] {w, h};
+		}
+		double scale = Math.min(max / (double) w, max / (double) h);
+		return new int[] {Math.max(2, (int) (w * scale) & ~1), Math.max(2, (int) (h * scale) & ~1)};
 	}
 
 	// ------------------------------------------------------------------------------------------------ static API
@@ -81,6 +108,8 @@ public final class VideoExporter {
 		VideoExporter exporter = new VideoExporter(session, settings, x264);
 		active = exporter;
 		last = exporter;
+		int[] size = gpuRenderSize(exporter.settings.outputWidth(), exporter.settings.outputHeight());
+		RenderResolution.begin(size[0], size[1]);
 		FrameHooks.setContinuous(exporter::capture);
 		return exporter;
 	}
@@ -173,7 +202,7 @@ public final class VideoExporter {
 				return;
 			}
 		} else if (target.width != width || target.height != height) {
-			fail(Component.translatable("streamerreplay.error.window_resized"));
+			fail(Component.translatable("streamerreplay.error.window_resized")); // cannot happen while RenderResolution is active
 			return;
 		}
 		int frameBytes = width * height * texture.getFormat().blockSize();
@@ -231,6 +260,7 @@ public final class VideoExporter {
 	private void finishEncoding() {
 		state = State.ENCODING;
 		FrameHooks.setContinuous(null);
+		RenderResolution.end();
 		session.stopPath();
 		releaseBuffers();
 		FfmpegEncoder enc = encoder;
@@ -291,6 +321,7 @@ public final class VideoExporter {
 			active = null;
 		}
 		FrameHooks.setContinuous(null);
+		RenderResolution.end();
 		if (encoder != null) {
 			encoder.close();
 		}
@@ -342,6 +373,10 @@ public final class VideoExporter {
 
 	public long elapsedMs() {
 		return System.currentTimeMillis() - startedAt;
+	}
+
+	public boolean cleanFrames() {
+		return settings.cleanFrames();
 	}
 
 	public boolean usesX264() {

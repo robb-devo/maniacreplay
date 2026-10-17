@@ -8,8 +8,11 @@
 		"ClientHandshakePacketListenerImplMixin",
 		"ConnectionAccessor",
 		"ConnectionMixin",
+		"DebugRendererMixin",
 		"DeltaTrackerTimerMixin",
+		"EntityRendererMixin",
 		"GameRendererMixin",
+		"LevelExtractorMixin",
 		"MinecraftMixin",
 		"TextureManagerMixin",
 		"ToastManagerMixin"

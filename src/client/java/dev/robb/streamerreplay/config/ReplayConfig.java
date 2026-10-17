@@ -32,6 +32,7 @@ public final class ReplayConfig {
 	public int exportFps = 60;
 	public ExportQuality exportQuality = ExportQuality.HIGH;
 	public ExportResolution exportResolution = ExportResolution.WINDOW;
+	public boolean exportCleanFrames = true;
 
 	public static ReplayConfig get() {
 		return instance;
@@ -101,7 +102,7 @@ public final class ReplayConfig {
 		}
 	}
 
-	/** Output resolution. Frames are rendered at window size and scaled by ffmpeg if needed. */
+	/** Output resolution. The game renders natively at this size, independent of the window. */
 	public enum ExportResolution {
 		WINDOW(0, 0),
 		HD_720(1280, 720),

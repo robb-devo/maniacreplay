@@ -16,6 +16,17 @@ abstract class GameRendererMixin {
 	@Shadow
 	public abstract RenderTarget mainRenderTarget();
 
+	@Shadow
+	public abstract net.minecraft.client.renderer.state.GameRenderState gameRenderState();
+
+	/** Clean export frames: no hand, screen overlays or 3D debug crosshair (the same switch F1 uses). */
+	@Inject(method = "render", at = @At("HEAD"))
+	private void streamerreplay$cleanFrame(CallbackInfo ci) {
+		if (dev.robb.streamerreplay.render.CleanFrames.active()) {
+			gameRenderState().guiRenderState.isHudHidden = true;
+		}
+	}
+
 	@Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/GameRenderer;applyPostEffects()V", shift = At.Shift.AFTER))
 	private void streamerreplay$afterWorld(CallbackInfo ci) {
 		FrameHooks.onWorldRendered(mainRenderTarget());

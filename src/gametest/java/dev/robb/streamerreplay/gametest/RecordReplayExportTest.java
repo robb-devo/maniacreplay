@@ -107,7 +107,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			sp.getServer().runCommand(String.format("fill %d %d %d %d %d %d minecraft:gold_block", x + 4, y, z + 4, x + 6, y + 4, z + 6));
 			sp.getServer().runCommand(String.format("fill %d %d %d %d %d %d minecraft:diamond_block", x - 6, y, z + 4, x - 4, y + 2, z + 6));
 			sp.getServer().runCommand(String.format("summon minecraft:pig %d %d %d", x + 2, y, z + 8));
-			sp.getServer().runCommand(String.format("summon minecraft:armor_stand %d %d %d", x - 2, y, z + 8));
+			sp.getServer().runCommand(String.format("summon minecraft:armor_stand %d %d %d {CustomName:\"Streamer\",CustomNameVisible:1b}", x - 2, y, z + 8));
 			ctx.waitTicks(40);
 			ctx.takeScreenshot("02_recording_indicator");
 			// walk around a bit (server side teleports produce position packets for the recording)
@@ -229,7 +229,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve(VIDEO_NAME));
 		ctx.runOnClient(mc -> {
 			ReplayConfig cfg = ReplayConfig.get();
-			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0), true);
+			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, true), true);
 			var progress = new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session()));
 			mc.gui.setScreen(progress);
 		});
@@ -252,6 +252,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		} catch (IOException e) {
 			throw new AssertionError(e);
 		}
+
+		nativeResolutionExport(ctx);
+		cleanFramesExport(ctx, b);
 
 		ctx.runOnClient(mc -> ReplayManager.exit());
 		ctx.waitForScreen(ReplayBrowserScreen.class);
@@ -417,6 +420,188 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			}
 		}
 		return null;
+	}
+
+	/** Runs one export to completion and returns its final state line. */
+	private static String export(ClientGameTestContext ctx, ExportSettings settings, Runnable whileRendering) {
+		ctx.runOnClient(mc -> {
+			VideoExporter.start(ReplayManager.session(), settings, true);
+			mc.gui.setScreen(new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session())));
+		});
+		ctx.waitTicks(20);
+		whileRendering.run();
+		ctx.waitFor(mc -> {
+			VideoExporter e = VideoExporter.current();
+			return e != null && (e.state() == VideoExporter.State.DONE || e.state() == VideoExporter.State.FAILED || e.state() == VideoExporter.State.CANCELLED);
+		}, 20 * 900);
+		String result = ctx.computeOnClient(mc -> VideoExporter.current().state() + " "
+			+ (VideoExporter.current().error() == null ? "-" : VideoExporter.current().error().getString())
+			+ " frames=" + VideoExporter.current().framesDone() + "/" + VideoExporter.current().totalFrames());
+		ctx.runOnClient(mc -> mc.gui.setScreen(null));
+		ctx.waitTicks(2);
+		return result;
+	}
+
+	/**
+	 * 1080p export from a 854×480 window, and the window is resized in the middle of it: the video must still be
+	 * a native 1920×1080 file, and the window must return to normal rendering afterwards.
+	 */
+	private static void nativeResolutionExport(ClientGameTestContext ctx) {
+		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Native 1080p.mp4"));
+		String result = export(ctx, new ExportSettings(video, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 1920, 1080, true), () -> {
+			int rendering = ctx.computeOnClient(mc -> mc.gameRenderer.mainRenderTarget().width);
+			StreamerReplay.LOGGER.info("[gametest] render target during 1080p export: {} wide", rendering);
+			check(rendering == 1920, "the game should render at 1920 wide during the export, was " + rendering);
+			ctx.takeScreenshot("10b_export_1080p_progress");
+			ctx.getInput().resizeWindow(700, 520);
+			ctx.waitTicks(20);
+		});
+		StreamerReplay.LOGGER.info("[gametest] 1080p export (window resized mid-way): {}", result);
+		check(result.startsWith("DONE"), "1080p export failed: " + result);
+		String probe = ffprobe(video);
+		StreamerReplay.LOGGER.info("[gametest] ffprobe 1080p: {}", probe);
+		check(probe.startsWith("h264,1920,1080"), "video should be native 1920x1080 H.264: " + probe);
+		// sharpness: a native 1080p frame has much more fine detail than the same frame squeezed through 480p
+		java.awt.image.BufferedImage nativeFrame = frame(video, "1", "");
+		java.awt.image.BufferedImage via480 = frame(video, "1", "scale=854:480,scale=1920:1080");
+		double sharp = laplacianVariance(nativeFrame);
+		double soft = laplacianVariance(via480);
+		double brightness = meanLuma(nativeFrame);
+		StreamerReplay.LOGGER.info("[gametest] 1080p sharpness: native {} vs 480p-upscaled {} (ratio {}), mean luma {}",
+			String.format("%.1f", sharp), String.format("%.1f", soft), String.format("%.2f", sharp / soft), String.format("%.1f", brightness));
+		check(sharp > soft * 1.3, "the 1080p video should be clearly sharper than an upscaled 480p frame");
+		check(brightness > 40, "the 1080p video should not be dark (sky/fog lost after the world rebuild?)");
+		float sky = ctx.computeOnClient(mc -> mc.gameRenderer.mainCamera().attributeProbe()
+			.getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_COLOR, 0).length());
+		check(sky > 0.1f, "the sky colour must be known again after the export's world rebuild");
+		ctx.getInput().resizeWindow(854, 480);
+		ctx.waitTicks(20);
+		int[] after = ctx.computeOnClient(mc -> new int[] {mc.gameRenderer.mainRenderTarget().width, mc.getWindow().getWidth(), mc.getWindow().getGuiScaledWidth()});
+		StreamerReplay.LOGGER.info("[gametest] after export: target {} window {} gui {}", after[0], after[1], after[2]);
+		check(after[0] == 854 && after[1] == 854, "rendering should return to the window size after the export");
+	}
+
+	/**
+	 * Two exports of the same short shot looking at the named armor stand, with hitboxes switched on (F3+B):
+	 * with "hide name tags & overlays" the frame must differ clearly from the one without.
+	 */
+	private static void cleanFramesExport(ClientGameTestContext ctx, Vec3 b) {
+		double t = ctx.computeOnClient(mc -> ReplayManager.session().clock().durationMs() * 0.8);
+		ctx.runOnClient(mc -> {
+			ReplaySession s = ReplayManager.session();
+			s.clearPath();
+			s.seek(t);
+		});
+		waitCaughtUp(ctx);
+		CameraState shot = new CameraState(b.x - 2.5, b.y + 2.2, b.z + 4.5, 0, 25, 0, 70); // just in front of the armor stand
+		ctx.runOnClient(mc -> key(ReplayManager.session(), shot));
+		ctx.runOnClient(mc -> ReplayManager.session().seek(t + 400));
+		waitCaughtUp(ctx);
+		ctx.runOnClient(mc -> {
+			key(ReplayManager.session(), shot);
+			mc.debugEntries.setStatus(net.minecraft.client.gui.components.debug.DebugScreenEntries.ENTITY_HITBOXES,
+				net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.ALWAYS_ON);
+		});
+		Path plain = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Overlays on.mp4"));
+		Path clean = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Overlays hidden.mp4"));
+		String r1 = export(ctx, new ExportSettings(plain, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, false), () -> { });
+		String r2 = export(ctx, new ExportSettings(clean, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, true), () -> { });
+		ctx.runOnClient(mc -> mc.debugEntries.setStatus(net.minecraft.client.gui.components.debug.DebugScreenEntries.ENTITY_HITBOXES,
+			net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.NEVER));
+		check(r1.startsWith("DONE") && r2.startsWith("DONE"), "clean-frame exports failed: " + r1 + " / " + r2);
+		long changed = differingPixels(firstFrame(plain), firstFrame(clean));
+		StreamerReplay.LOGGER.info("[gametest] clean frames: {} pixels differ between overlays on/hidden", changed);
+		check(changed > 300, "hiding name tags and hitboxes should visibly change the frame (" + changed + " px)");
+	}
+
+	private static String ffprobe(Path video) {
+		return run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", video.toString()).strip();
+	}
+
+	private static java.awt.image.BufferedImage firstFrame(Path video) {
+		Path png = video.resolveSibling(video.getFileName() + ".frame0.png");
+		run("ffmpeg", "-v", "error", "-y", "-i", video.toString(), "-frames:v", "1", png.toString());
+		try {
+			return javax.imageio.ImageIO.read(png.toFile());
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+	}
+
+	private static long differingPixels(java.awt.image.BufferedImage a, java.awt.image.BufferedImage b) {
+		long count = 0;
+		for (int y = 0; y < Math.min(a.getHeight(), b.getHeight()); y++) {
+			for (int x = 0; x < Math.min(a.getWidth(), b.getWidth()); x++) {
+				int p = a.getRGB(x, y);
+				int q = b.getRGB(x, y);
+				int d = Math.max(Math.abs((p >> 16 & 255) - (q >> 16 & 255)), Math.max(Math.abs((p >> 8 & 255) - (q >> 8 & 255)), Math.abs((p & 255) - (q & 255))));
+				if (d > 40) {
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
+	private static String run(String... command) {
+		try {
+			Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+			String out = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+			process.waitFor();
+			return out;
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new AssertionError(e);
+		}
+	}
+
+	private static java.awt.image.BufferedImage frame(Path video, String second, String filter) {
+		Path png = video.resolveSibling(video.getFileName() + ".frame" + second + (filter.isEmpty() ? "" : "-filtered") + ".png");
+		java.util.List<String> cmd = new java.util.ArrayList<>(java.util.List.of("ffmpeg", "-v", "error", "-y", "-ss", second, "-i", video.toString(), "-frames:v", "1"));
+		if (!filter.isEmpty()) {
+			cmd.addAll(java.util.List.of("-vf", filter + ":flags=bicubic"));
+		}
+		cmd.add(png.toString());
+		run(cmd.toArray(String[]::new));
+		try {
+			return javax.imageio.ImageIO.read(png.toFile());
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+	}
+
+	private static double luma(int rgb) {
+		return 0.299 * (rgb >> 16 & 255) + 0.587 * (rgb >> 8 & 255) + 0.114 * (rgb & 255);
+	}
+
+	private static double meanLuma(java.awt.image.BufferedImage img) {
+		double sum = 0;
+		for (int y = 0; y < img.getHeight(); y++) {
+			for (int x = 0; x < img.getWidth(); x++) {
+				sum += luma(img.getRGB(x, y));
+			}
+		}
+		return sum / ((double) img.getWidth() * img.getHeight());
+	}
+
+	/** Variance of the 4-neighbour Laplacian: the standard "how much fine detail" measure. */
+	private static double laplacianVariance(java.awt.image.BufferedImage img) {
+		double sum = 0;
+		double sumSq = 0;
+		long n = 0;
+		for (int y = 1; y < img.getHeight() - 1; y++) {
+			for (int x = 1; x < img.getWidth() - 1; x++) {
+				double l = 4 * luma(img.getRGB(x, y)) - luma(img.getRGB(x - 1, y)) - luma(img.getRGB(x + 1, y))
+					- luma(img.getRGB(x, y - 1)) - luma(img.getRGB(x, y + 1));
+				sum += l;
+				sumSq += l * l;
+				n++;
+			}
+		}
+		double mean = sum / n;
+		return sumSq / n - mean * mean;
 	}
 
 	private static void key(ReplaySession s, CameraState pose) {

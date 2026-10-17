@@ -78,6 +78,13 @@ public final class ExportScreen extends Screen {
 				config.exportQuality = v;
 				config.save();
 			}));
+		y += 24;
+		addRenderableWidget(CycleButton.onOffBuilder(config.exportCleanFrames)
+			.withTooltip(v -> Tooltip.create(Component.translatable("streamerreplay.export.clean_frames.tooltip")))
+			.create(cx - w - 4, y, 2 * w + 8, 20, Component.translatable("streamerreplay.export.clean_frames"), (b, v) -> {
+				config.exportCleanFrames = v;
+				config.save();
+			}));
 		y += 34;
 
 		ffmpegBox = new EditBox(font, cx - w - 4, y, 2 * w + 8 - 64, 20, Component.translatable("streamerreplay.export.ffmpeg"));
@@ -145,7 +152,7 @@ public final class ExportScreen extends Screen {
 			output = folder.resolve(name + " (" + i + ").mp4");
 		}
 		ExportSettings settings = new ExportSettings(output, config.ffmpegPath, config.exportFps, config.exportQuality,
-			config.exportResolution.width, config.exportResolution.height);
+			config.exportResolution.width, config.exportResolution.height, config.exportCleanFrames);
 		VideoExporter.start(session, settings, probeResult != null && probeResult.hasX264());
 		minecraft.gui.setScreen(new ExportProgressScreen(parent));
 	}
@@ -161,7 +168,7 @@ public final class ExportScreen extends Screen {
 			TimeFormat.clock(session.path().durationMs()), frames), cx, top - 31, Theme.TEXT_DIM);
 		g.text(font, Component.translatable("streamerreplay.export.file_name"), cx - 154, top - 11, Theme.TEXT_FAINT, false);
 
-		int ffmpegY = top + 34 + 24 + 34;
+		int ffmpegY = top + 34 + 24 + 24 + 34;
 		g.text(font, Component.translatable("streamerreplay.export.ffmpeg"), cx - 154, ffmpegY - 10, Theme.TEXT_FAINT, false);
 		Component status;
 		int color;
@@ -176,13 +183,6 @@ public final class ExportScreen extends Screen {
 			color = Theme.ERROR;
 		}
 		g.centeredText(font, status, cx, ffmpegY + 25, color);
-		if (ReplayConfig.get().exportResolution != ReplayConfig.ExportResolution.WINDOW) {
-			Window window = minecraft.getWindow();
-			if (window.getWidth() < ReplayConfig.get().exportResolution.width) {
-				g.centeredText(font, Component.translatable("streamerreplay.export.upscale_warning", window.getWidth(), window.getHeight()),
-					cx, ffmpegY + 66, Theme.MARKER);
-			}
-		}
 	}
 
 	@Override
