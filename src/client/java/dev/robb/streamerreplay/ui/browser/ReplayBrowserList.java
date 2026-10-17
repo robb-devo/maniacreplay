@@ -54,14 +54,19 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 	public void setReplays(List<ReplayInfo> replays, @Nullable ReplayInfo keepSelected) {
 		clearEntries();
 		Entry select = null;
+		Entry first = null;
 		for (ReplayInfo info : replays) {
 			Entry entry = new Entry(info);
 			addEntry(entry);
+			if (first == null && info.readable()) {
+				first = entry;
+			}
 			if (keepSelected != null && info.file().equals(keepSelected.file())) {
 				select = entry;
 			}
 		}
-		setSelected(select);
+		// The newest replay is pre-selected, so "Watch" works right away (the list is sorted newest first).
+		setSelected(select != null ? select : first);
 		setScrollAmount(scrollAmount());
 	}
 

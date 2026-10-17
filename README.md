@@ -103,7 +103,7 @@ You don't need to take anyone's word for it:
 
   ```
   SHA-256 (streamer-replay-mod-1.0.0.jar)
-  008f12e943fc280da5d4c5276193c8c911cb4354bb03d8fc3d848e7c94801a40
+  b1a35e2f8c23c19033770a86f78cc392ce709a236b3a67bdd3c00b4582942a7e
   ```
 
   If the value differs, the file is not the official release. Delete it and download from the official
