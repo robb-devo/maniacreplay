@@ -63,6 +63,8 @@ public final class VideoExporter {
 	private int framesDelivered;
 	private int inFlight;
 	private boolean needsStep;
+	/** Consecutive renders at a size other than the export size (see {@link #capture}). */
+	private int foreignFrames;
 	private boolean captureThisFrame;
 	private long settleStart;
 	private int settleFrames;
@@ -192,6 +194,15 @@ public final class VideoExporter {
 		if (!captureThisFrame || state != State.RENDERING) {
 			return;
 		}
+		if (RenderResolution.isActive() && (target.width != RenderResolution.width() || target.height != RenderResolution.height())) {
+			// An extra render at another size (e.g. a screenshot tool rendering at window size) is not a video
+			// frame: keep waiting for the next normal frame instead of failing the export.
+			if (++foreignFrames > 120) {
+				fail(Component.translatable("streamerreplay.error.window_resized"));
+			}
+			return;
+		}
+		foreignFrames = 0;
 		captureThisFrame = false;
 		GpuTexture texture = target.getColorTexture();
 		if (texture == null) {
@@ -202,6 +213,7 @@ public final class VideoExporter {
 				return;
 			}
 		} else if (target.width != width || target.height != height) {
+			StreamerReplay.LOGGER.error("Export frame size changed: {}x{} -> {}x{}", width, height, target.width, target.height);
 			fail(Component.translatable("streamerreplay.error.window_resized")); // cannot happen while RenderResolution is active
 			return;
 		}
