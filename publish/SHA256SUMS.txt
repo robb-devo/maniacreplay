@@ -1,1 +1,1 @@
-d98e4ee64e3fbfa0382ced2bf99fc3a985cef4300333ba86b4080d95a407301f  streamer-replay-mod-1.0.0.jar
+2b3c5b71a673c319fb32235f0b8dee4ee8f271eb384637b2e383c38e4c1791af  streamer-replay-mod-1.1.0.jar

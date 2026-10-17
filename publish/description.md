@@ -88,4 +88,4 @@ MIT, open source: https://github.com/robb-devo/streamer-replay-mod
 - **Open source.** The full code is on GitHub.
 - **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
 - **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `SHA256_PLACEHOLDER`
+  `2b3c5b71a673c319fb32235f0b8dee4ee8f271eb384637b2e383c38e4c1791af`

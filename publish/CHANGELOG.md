@@ -21,7 +21,7 @@
   unit tests for ffmpeg discovery on Windows/macOS/Linux, and a seek benchmark.
 
 **SHA-256** of `streamer-replay-mod-1.1.0.jar`:
-`SHA256_PLACEHOLDER`
+`2b3c5b71a673c319fb32235f0b8dee4ee8f271eb384637b2e383c38e4c1791af`
 
 ## 1.0.0 (first release, Minecraft 26.3, Fabric)
 
