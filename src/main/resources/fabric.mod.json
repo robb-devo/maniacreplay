@@ -1,0 +1,41 @@
+{
+	"schemaVersion": 1,
+	"id": "streamerreplay",
+	"version": "${version}",
+	"name": "Streamer Replay",
+	"description": "Records every session automatically and lets you replay it with a free camera, smooth camera paths and one-click video export. Built for streamers: zero setup, tiny overhead.",
+	"authors": ["robb-devo"],
+	"contact": {
+		"sources": "https://github.com/robb-devo/streamer-replay-mod",
+		"issues": "https://github.com/robb-devo/streamer-replay-mod/issues"
+	},
+	"license": "MIT",
+	"icon": "assets/streamerreplay/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.robb.streamerreplay.StreamerReplayClient"],
+		"modmenu": ["dev.robb.streamerreplay.compat.ModMenuIntegration"]
+	},
+	"mixins": [
+		{"config": "streamerreplay.client.mixins.json", "environment": "client"}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
+	},
+	"breaks": {
+		"replaymod": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"links": {
+				"modmenu.github_releases": "https://github.com/robb-devo/streamer-replay-mod/releases"
+			}
+		}
+	}
+}

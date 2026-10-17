@@ -1,0 +1,18 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.robb.streamerreplay.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"CameraMixin",
+		"ClientHandshakePacketListenerImplMixin",
+		"ConnectionAccessor",
+		"ConnectionMixin",
+		"DeltaTrackerTimerMixin",
+		"GameRendererMixin",
+		"MinecraftMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
