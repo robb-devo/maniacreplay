@@ -51,7 +51,7 @@ public final class FfmpegEncoder implements AutoCloseable {
 	}
 
 	static List<String> command(ExportSettings settings, int width, int height, boolean x264) {
-		List<String> cmd = new ArrayList<>(List.of(settings.ffmpeg(), "-hide_banner", "-loglevel", "warning", "-y",
+		List<String> cmd = new ArrayList<>(List.of(FfmpegProbe.resolve(settings.ffmpeg()), "-hide_banner", "-loglevel", "warning", "-y",
 			"-f", "rawvideo", "-pix_fmt", "rgba", "-s", width + "x" + height, "-r", Integer.toString(settings.fps()), "-i", "-"));
 		cmd.add("-vf");
 		cmd.add(filters(settings, width, height));

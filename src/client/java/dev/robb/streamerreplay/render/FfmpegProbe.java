@@ -1,10 +1,12 @@
 package dev.robb.streamerreplay.render;
 
+import dev.robb.streamerreplay.util.FfmpegLocator;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import net.fabricmc.loader.api.FabricLoader;
 
 /** Checks asynchronously whether ffmpeg can be started and which H.264 encoder it offers. */
 public final class FfmpegProbe {
@@ -18,8 +20,14 @@ public final class FfmpegProbe {
 	private FfmpegProbe() {
 	}
 
-	public static CompletableFuture<Result> probe(String executable) {
-		return CompletableFuture.supplyAsync(() -> run(executable));
+	/** Probes the configured value; plain "ffmpeg" is first looked up in the usual install folders. */
+	public static CompletableFuture<Result> probe(String configured) {
+		return CompletableFuture.supplyAsync(() -> run(resolve(configured)));
+	}
+
+	/** The program that will really be started for a configured value (see {@link FfmpegLocator}). */
+	public static String resolve(String configured) {
+		return FfmpegLocator.resolve(configured, FabricLoader.getInstance().getGameDir());
 	}
 
 	static Result run(String executable) {
