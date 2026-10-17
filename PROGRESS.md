@@ -19,7 +19,6 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (a
 - Publish kit: `publish/` (descriptions EN + DE short, summary, tags, changelog, gallery, 512px icon, jar, SHA256SUMS).
 
 ## Not tested / open
-- Browser pre-selects the newest replay (added after review pass 5).
 - Iris: the box has no GLX visual (OpenGL), so Iris aborts at startup in this environment, with or without this mod.
   The game itself ran on the Vulkan backend (llvmpipe).
 - The OpenGL backend in general (same reason); all runs used Vulkan.
@@ -58,3 +57,10 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (a
    - The license is clean (MIT, no third-party code).
    - Fully-qualified-name clean-ups.
    - Docs checked against the code (speed range 0.1–16×, spline type, folder names).
+   - UX: the browser now pre-selects the newest replay, so Watch works with one click.
+   - Gallery screenshots no longer have toasts covering the screen titles.
+
+## Publishing (needs the user)
+- GitHub: not created or pushed by the agent (needs explicit user approval). Command:
+  `gh repo create robb-devo/streamer-replay-mod --private --source=/workspace/streamer-replay-mod --remote=origin --push`
+- Modrinth/CurseForge: the user uploads `publish/streamer-replay-mod-1.0.0.jar` with the texts in `publish/`.
