@@ -118,7 +118,8 @@ fabricApi {
 		enableGameTests = false
 		enableClientGameTests = true
 		eula = true
-		clearRunDirectory = true
+		// A shader-pack run prepares its own fresh run directory (see below).
+		clearRunDirectory = !project.hasProperty("shaderPack")
 	}
 }
 
@@ -134,5 +135,22 @@ tasks.matching { it.name == "runClientGameTest" }.configureEach {
 tasks.matching { it.name == "runClientGameTest" }.configureEach {
 	if (project.hasProperty("gametestLang")) {
 		jvmArgs("-Dstreamerreplay.gametest.lang=" + project.property("gametestLang"))
+	}
+}
+
+// Iris run: ./gradlew runClientGameTest -PcompatMods=...iris.jar,...sodium.jar -PshaderPack=/path/pack.zip
+// Starts from an empty run directory with the pack installed and enabled.
+if (project.hasProperty("shaderPack")) {
+	def runDir = layout.projectDirectory.dir("build/run/clientGameTest").asFile
+	def pack = file(project.property("shaderPack").toString())
+	tasks.matching { it.name == "runClientGameTest" }.configureEach {
+		doFirst {
+			runDir.deleteDir()
+			new File(runDir, "shaderpacks").mkdirs()
+			new File(runDir, "config").mkdirs()
+			java.nio.file.Files.copy(pack.toPath(), new File(runDir, "shaderpacks/" + pack.name).toPath())
+			new File(runDir, "config/iris.properties").text = "enableShaders=true\nshaderPack=" + pack.name + "\n"
+			new File(runDir, "eula.txt").text = "eula=true\n"
+		}
 	}
 }
