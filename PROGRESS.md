@@ -4,30 +4,34 @@ Target: Minecraft 26.3, Fabric Loader 0.19.5, Fabric API 0.163.0+26.3, Loom 1.18
 Build: `export JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64; ./gradlew build --no-daemon`. The jar is copied to `dist/`.
 
 E2E test: `DISPLAY=:99 timeout 900 ./gradlew runClientGameTest --no-daemon`. Add `-PcompatMods=a.jar,b.jar` for a compat run.
-Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (and `screenshots/compat-sodium-lithium-modmenu/`).
+Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/`, `screenshots/de_de/`, `screenshots/compat-*/`, `screenshots/crash-recovery/`.
 
-## Status: release candidate 1.0.0
-- Unit tests: 21 (format, recovery, splines, time format, translations: de_de has every en_us key, matching placeholders, every key used in code exists).
-- The e2e client gametest passes on its own and with Sodium 0.9.3-beta.1, Lithium 0.26.2 and Mod Menu 21.0.0. It covers:
-  - SP auto-record, marker, thumbnail, browser, settings
-  - replay open, seek forward/back, click-ray follow and unfollow, Esc replay menu
-  - camera path (3 keyframes) and editor overlay
-  - MP4 export (H.264) to DONE, video > 10 KB
-  - dedicated-server recording (TCP, compression 64) and its playback containing server-placed blocks
-  - return to the title screen
-  - every main screen checks that each label fits its widget and that widgets do not overlap (browser, rename, settings, replay menu, editor, export, export done)
-  - umlaut names: world "Prüfwelt Äöü ß", rename to "Grüße aus der Öl-Straße – Übung", export to "Kamerafahrt Übung.mp4"
-- German run (`-PgametestLang=de_de`) passes too, also with Sodium + Lithium + Mod Menu. Screenshots: `screenshots/de_de/`, `screenshots/compat-sodium-lithium-modmenu-de_de/`.
-- Docs: README (features, controls, install, safety/checksum, compat, limits), ARCHITECTURE.md, LICENSE (MIT).
-- Publish kit: `publish/` (descriptions EN + DE short, summary, tags, changelog, gallery, 512px icon, jar, SHA256SUMS).
+## Status: 1.1.0 (perfection pass done)
+- Unit tests: 31 (format, recovery, splines, time format, translations, ffmpeg discovery for Windows/macOS/Linux).
+- E2E client gametest passes in four configurations (runs of 2026-10-17, 23:13–23:20 CEST):
+  vanilla EN, vanilla DE (`-PgametestLang=de_de`, label fit ok on every screen), Sodium 0.9.3-beta.1 + Lithium 0.26.2 +
+  Mod Menu 21.0.0, and Iris 1.11.7 + Sodium + MakeUp UltraFast 9.5g on OpenGL 4.6 (Mesa llvmpipe, `SDL_VIDEO_FORCE_EGL=1`).
+  On top of the 1.0.0 coverage it checks:
+  - paused replay: mouse look (SDL relative motion event), W flight, real left click follows the pig, Shift unfollows,
+    replay time unchanged, backward seek while paused leaves the loading screen and stays paused
+  - onboarding toasts suppressed in replays
+  - "Stop Recording" without recording shows the rejoin hint
+  - native 1080p export from an 854×480 window, window resized to 700×520 mid-export, harness screenshot (extra render
+    at window size) mid-export: ffprobe `h264,1920,1080`; sharpness (Laplacian variance) native 123.8 vs same frame
+    through 480p 16.6 (ratio 7.5; with Iris 3.4); mean luma > 40 and sky colour known after the world rebuild
+  - clean frames: hitboxes + name tag on vs. off, ~7500 px differ (5562 with Iris); frames in `screenshots/export-evidence/`
+- `scripts/crash-recovery-test.sh`: SIGKILL of the game JVM mid-recording, restart, recovered `.sreplay` with world
+  name and marker, sidecars cleaned up, replay plays (13 s). Passes.
+- Seek benchmark (`-PgametestProps=streamerreplay.gametest.mode=seekbench`, 93 s replay, 40 mobs, 343 KB):
+  98%→90% 511 ms, 98%→50% 441 ms, 98%→10% 436 ms, 10%→98% 136 ms (25 ms budget); a 100 ms budget was not faster.
 
 ## Not tested / open
-- Iris: the box has no GLX visual (OpenGL), so Iris aborts at startup in this environment, with or without this mod.
-  The game itself ran on the Vulkan backend (llvmpipe).
-- The OpenGL backend in general (same reason); all runs used Vulkan.
-- Real mouse clicks and key presses: the test drives the same code paths from code.
-- Windows/macOS ffmpeg discovery (only Linux ffmpeg 7.1.5 used).
-- Very long replays (hours): reading is streamed, but seeking backwards rebuilds from the start, which costs time.
+- Real Windows/macOS machines (ffmpeg discovery is unit-tested with simulated disks only).
+- Real GPUs; all runs used software rendering (Vulkan llvmpipe, or OpenGL llvmpipe for Iris).
+- Iris on Vulkan, other shader packs than MakeUp UltraFast (Complementary is downloaded but not run).
+- 1440p/4K exports (same code path as 1080p, only 1080p was run).
+- Replays of hours: seek time extrapolated (~5 s/hour), not measured.
+- The compat DE screenshot folder (`screenshots/compat-sodium-lithium-modmenu-de_de/`) is from the 1.0.0 run.
 
 ## Review log
 1. **After first compile and e2e run.**
@@ -69,7 +73,23 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (a
    - Overflow found and fixed: settings "Serveradresse speichern" (became "Server-IP speichern"). In the editor, "Replay beenden" moved to the top right and buttons now size to their labels. On the export screen, resolution got its own full-width row.
    - The editor hint moves up one line if it would collide with the path info.
 
-## Publishing (needs the user)
-- GitHub: not created or pushed by the agent (needs explicit user approval). Command:
-  `gh repo create robb-devo/streamer-replay-mod --private --source=/workspace/streamer-replay-mod --remote=origin --push`
-- Modrinth/CurseForge: the user uploads `publish/streamer-replay-mod-1.0.0.jar` with the texts in `publish/`.
+7. **1.1.0 perfection pass** (each item reviewed after implementing it).
+   - Paused interaction: replaced the 20 Hz "UI ticks" with real frozen game ticks (paused-tick semantics). Found and
+     fixed: the left click was eaten by vanilla's tick before our handler (now handled in the pre-attack callback).
+   - Clean frames: the first version had no effect because the new mixins were not registered; caught by the
+     frame-comparison test.
+   - Native resolution: found a black sky after the world rebuild at the start of an export (the sky/fog probe is
+     only ticked in unpaused ticks) and fixed it; found that a render at another size (screenshot) failed the
+     export and made it skip such renders instead.
+   - Backward seek: found that a paused replay stayed on the loading screen forever after seeking back (the
+     level-load tracker is only ticked by the game mode in unpaused ticks). Fixed, with a regression check.
+     Measured seek costs; a larger delivery budget did not help and was removed; checkpoints rejected (see ARCHITECTURE).
+   - Recording mid-session: rejected as not robust; a clear hint instead.
+   - Crash test: found that the "recordings restored" toast showed a raw key when created during start-up resource
+     loading; toasts are now queued until loading has finished.
+   - ffmpeg discovery: pure, unit-tested `FfmpegLocator`; custom paths are respected as typed (quotes stripped, `.exe` added).
+   - OpenGL: Xvfb GLX has no sRGB-capable visual, which the game requests; EGL works (`SDL_VIDEO_FORCE_EGL=1`).
+
+## Publishing
+- GitHub: https://github.com/robb-devo/streamer-replay-mod (private), pushed after every step.
+- Modrinth/CurseForge: the user uploads `publish/streamer-replay-mod-1.1.0.jar` with the texts in `publish/`.

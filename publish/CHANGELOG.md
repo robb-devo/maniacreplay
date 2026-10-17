@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.0 (Minecraft 26.3, Fabric)
+
+- **Paused replays are fully interactive**: mouse look, flying and click-to-follow work while paused. The world stays
+  frozen and the replay time does not move.
+- **Native-resolution export**: 1080p, 1440p and 4K are rendered by the game at that size, off-screen, whatever the
+  window size. Resizing the window during an export no longer breaks it.
+- **Clean frames** (new export option, on by default): hides name tags, the block outline, the hand and debug views
+  (hitboxes, chunk borders) in the video.
+- **Iris shader packs are tested**: Iris 1.11.7 + Sodium with MakeUp UltraFast pass the full test on OpenGL, export included.
+- **ffmpeg is found automatically** in PATH, WinGet, Scoop, Chocolatey, `C:\ffmpeg`, Homebrew, MacPorts or `.minecraft/ffmpeg`,
+  even when the launcher does not see your PATH.
+- Vanilla tutorial and onboarding toasts are no longer shown during replays.
+- *Stop Recording* without a running recording now explains how to start one (recordings start when you join).
+- Fixes:
+  - A backward seek while paused no longer gets stuck on the loading screen.
+  - The sky no longer turns black after a world rebuild while paused or exporting.
+  - The "recordings restored" message no longer shows a raw text key when it appears during start-up.
+- Tests: a real crash test (the game is killed with SIGKILL while recording, then the replay is recovered and played),
+  unit tests for ffmpeg discovery on Windows/macOS/Linux, and a seek benchmark.
+
+**SHA-256** of `streamer-replay-mod-1.1.0.jar`:
+`SHA256_PLACEHOLDER`
+
 ## 1.0.0 (first release, Minecraft 26.3, Fabric)
 
 - Automatic recording in singleplayer and multiplayer, with a REC indicator, markers (M) and crash recovery.

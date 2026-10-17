@@ -62,11 +62,22 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 3. **Replay clock.** `ReplayClock` decides the current replay time and supports play/pause, speed and jumps.
    Each frame, all messages up to that time are delivered. Game ticks (animations, entity movement) are derived
    from replay time rather than wall time, so pause and slow motion affect the world but not the menus.
+   - **Paused or very slow:** the game still runs one "frozen" tick every 50 ms, marked as a paused tick, exactly
+     like a paused singleplayer game. Menus, key bindings, mouse look, flying and clicks keep working, but entities,
+     block animations and textures stand still. Two things vanilla only updates in unpaused ticks are fed by hand
+     in a frozen tick: the sky/fog colour probe (or the sky turns black after a world rebuild) and the level-load
+     tracker (or the loading screen after a backward seek would never close).
+   - Vanilla tutorial and onboarding toasts are filtered out while a replay is open (`ToastManagerMixin`).
 4. **Seeking.**
    - Forward: the session delivers the messages in between quickly.
    - Backward: the session rebuilds the world from the start and fast-forwards. The messages describe *changes*,
      so there is no other way to go back in time. An overlay shows while this runs, and your camera position and
      any open editor are restored afterwards.
+   - Measured: ~0.3–0.5 s, almost all of it the fixed reconnect + level-load cost; packet delivery is ~1.3 ms per
+     recorded second. A bigger per-frame delivery budget during seeks was tried and was not faster, so it was dropped.
+   - Checkpoints (periodic snapshots to jump back to) were rejected: the client's world (chunks with light, entities
+     with their data, block entities, scoreboards, boss bars, maps, the player list, registries) cannot be copied and
+     restored safely, and a half-correct snapshot is worse than a slower correct rebuild.
 5. **Camera.** `ReplayCamera` flies smoothly with WASD and the mouse.
    - Clicking an entity follows it, using `EntityPicker`, a long-range ray from the camera.
    - Shift goes back to the free camera.
@@ -92,11 +103,23 @@ compatible (the game does its normal work, so render mods such as Sodium still a
    - places the camera on the path
    - waits until the world has finished building
    - captures the image
-2. **Capture.** The image is copied from the graphics card into a reusable buffer. Up to 3 frames are in flight, so the
+   - skips any render that is not at the export size (for example a screenshot tool rendering at window size)
+2. **Native resolution.** `RenderResolution` tells the game its framebuffer has the export size (for example 1920×1080),
+   so the world, post effects, shader packs and GUI all render at that size into the normal main target. Only the very
+   last step changes: the finished image is scaled down to the real window for the on-screen preview. A window resize
+   only re-applies the virtual size. Sizes above the GPU's texture limit are clamped and scaled by ffmpeg.
+3. **Clean frames.** `CleanFrames` is on while an export with "hide name tags & overlays" runs. Small hooks then
+   drop name tags (`EntityRendererMixin`), the block outline (`LevelExtractorMixin`) and debug gizmos such as hitboxes
+   (`DebugRendererMixin`), and mark the HUD hidden (which also hides the hand). The 2D HUD and menus are never in the
+   video anyway, because the image is captured right after the world and its post effects, before the GUI.
+4. **Capture.** The image is copied from the graphics card into a reusable buffer. Up to 3 frames are in flight, so the
    graphics card and the CPU work at the same time.
-3. **Encode.** `FfmpegEncoder` pipes the raw frames to an external ffmpeg process on its own writer thread. It uses H.264
+5. **Encode.** `FfmpegEncoder` pipes the raw frames to an external ffmpeg process on its own writer thread. It uses H.264
    (`libx264`) when available and MPEG-4 otherwise. Next to the video it writes a log file, for troubleshooting.
-4. Export runs at whatever speed your PC manages, while the video plays back smoothly at the chosen FPS.
+   `FfmpegLocator` finds ffmpeg when the setting is just `ffmpeg`: PATH first, then a copy in the game folder, then
+   where WinGet, Scoop, Chocolatey, Homebrew and MacPorts put it. That matters because launchers often do not see the
+   PATH of the user's terminal. It only checks which files exist; it never downloads or runs anything else.
+6. Export runs at whatever speed your PC manages, while the video plays back smoothly at the chosen FPS.
    Cancelling deletes the half-written file.
 
 ## User interface
@@ -121,10 +144,17 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 
 ## Testing
 
-- **Unit tests** (`./gradlew test`) cover the file format, recovery, splines and time formatting.
+- **Unit tests** (`./gradlew test`) cover the file format, recovery, splines, time formatting, ffmpeg discovery on
+  Windows/macOS/Linux (with a simulated disk) and that German has every English key.
 - **End-to-end client test** (`./gradlew runClientGameTest`) starts the real game and checks the whole flow, taking
   screenshots along the way:
   - records singleplayer and a real dedicated server
   - browses, watches, seeks and follows an entity
   - builds a camera path and exports a video
-- Add `-PcompatMods=a.jar,b.jar` to run the same test with other mods loaded, for example Sodium, Iris and Lithium.
+  - uses mouse look, flying and clicks while paused
+  - exports at native 1080p (checked with ffprobe and a sharpness measure) and with clean frames on/off (frames compared)
+- Add `-PcompatMods=a.jar,b.jar` to run the same test with other mods loaded, for example Sodium, Iris and Lithium,
+  and `-PshaderPack=pack.zip` to enable an Iris shader pack.
+- `scripts/crash-recovery-test.sh` kills the game with SIGKILL mid-recording, restarts it and checks the recovered replay.
+- Recording a session that is already running is deliberately not supported (see README, *Known limitations*); the
+  game explains how to record instead.

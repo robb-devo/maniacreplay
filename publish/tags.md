@@ -19,4 +19,4 @@ minigame, mobs, optimization, social, storage, technology, transportation, utili
 Suggested: `Utility & QoL`, `Miscellaneous`.
 
 ## Keywords
-replay, recording, camera, cinematic, video, export, streamer, ffmpeg, timeline, spectator
+replay, recording, camera, cinematic, video, export, streamer, ffmpeg, timeline, spectator, 4k, shaders, iris

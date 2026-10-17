@@ -17,11 +17,15 @@ the clip *after* it happened, without having to plan for it.
   - Play/pause (**K**), ±5 s (**← / →**), speed from 0.1× to 16×.
   - A timeline you can scrub.
 - **Free camera.** Fly anywhere. **Click any player or mob to follow them** (Shift returns to the free camera).
+  All of this also works **while paused**: the world freezes, you keep looking around, flying and picking targets.
 - **Camera path editor** (**O**):
   - Add keyframes (**I**). Each one stores position, rotation, FOV and **camera roll**.
   - Paths are smooth, drawn over the world while editing and previewed in real time.
 - **Video export to MP4** (H.264 via ffmpeg):
   - Rendered frame by frame, so the video is perfectly smooth even when your PC is not.
+  - **Real 1080p, 1440p or 4K**, rendered at that size whatever your window size.
+  - **Clean frames** by default: no name tags, block outline, hand or debug overlays in the video.
+  - Works with **Iris shader packs**.
   - A progress screen shows the ETA and has a cancel button.
 - **Crash-safe.** If the game crashes mid-recording, the replay is recovered on the next start.
 - **Settings screen** (also via Mod Menu), in **English and German**. Every text, including errors, is translated natively, and umlauts in replay and video names work.
@@ -33,14 +37,15 @@ the clip *after* it happened, without having to plan for it.
     There is no stutter and no per-packet garbage.
   - With nothing recording or replaying, the mod's hooks cost practically nothing.
 - **Compatibility-friendly.** It uses only small, targeted mixin injections. Integrations are optional and guarded.
-  The full end-to-end test (record, watch, follow, camera path, export, multiplayer) passes with **Sodium, Lithium and Mod Menu** installed.
-  It is designed to work with Iris, but that has not been tested yet; feedback is welcome.
+  The full end-to-end test (record, watch, follow, camera path, export, multiplayer) passes with **Sodium, Lithium and Mod Menu** installed,
+  and with **Iris + Sodium and the MakeUp UltraFast shader pack** on OpenGL (software rendering on the test machine).
 - **Private by default.** The server address is *not* stored in replays unless you enable it.
 
 ## 🎬 Video export needs ffmpeg
 
 The mod does not include ffmpeg. Install it (e.g. `winget install ffmpeg`, `brew install ffmpeg`, or your Linux package manager)
-or point the settings to `ffmpeg.exe`. The export screen tells you whether ffmpeg was found. Recording and watching
+or unzip it into `.minecraft/ffmpeg`. It is found automatically (PATH, WinGet, Scoop, Chocolatey, Homebrew, MacPorts),
+or you can point the settings to `ffmpeg.exe`. The export screen tells you whether ffmpeg was found. Recording and watching
 work without ffmpeg.
 
 ## 🎮 Controls (all rebindable)
@@ -62,8 +67,8 @@ work without ffmpeg.
 
 ## ⚠ Notes
 
-- Recording starts at join, so to record an ongoing session, rejoin.
-- Videos are rendered at your window size and scaled to the chosen resolution. Use a large window for crisp 1080p.
+- Recording starts at join, so to record an ongoing session, rejoin (the game tells you this).
+- Seeking backwards rebuilds the world; it takes well under a second for typical replays.
 - Replays play back on the same Minecraft version they were recorded on.
 - Not compatible with the original ReplayMod. Both tap the same network pipeline, so use one or the other.
 - Respect server rules. Some servers do not allow recording.
@@ -83,4 +88,4 @@ MIT, open source: https://github.com/robb-devo/streamer-replay-mod
 - **Open source.** The full code is on GitHub.
 - **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
 - **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `d98e4ee64e3fbfa0382ced2bf99fc3a985cef4300333ba86b4080d95a407301f`
+  `SHA256_PLACEHOLDER`
