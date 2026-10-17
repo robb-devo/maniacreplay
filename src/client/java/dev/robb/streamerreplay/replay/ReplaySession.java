@@ -1,6 +1,7 @@
 package dev.robb.streamerreplay.replay;
 
 import dev.robb.streamerreplay.input.ReplayKeys;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.PacketStreamReader;
@@ -90,13 +91,12 @@ public final class ReplaySession {
 		try {
 			ReplayMeta meta = ReplayArchive.readMeta(zip);
 			if (meta.formatVersion > ReplayFormat.FORMAT_VERSION) {
-				throw new IOException("This replay was made with a newer version of Streamer Replay");
+				throw new LocalizedIOException("streamerreplay.error.newer_format");
 			}
 			int protocol = net.minecraft.SharedConstants.getCurrentVersion().protocolVersion();
 			if (meta.protocolVersion != 0 && meta.protocolVersion != protocol) {
 				// Packets are stored exactly as the server sent them; another protocol cannot be decoded safely.
-				throw new IOException("Recorded with Minecraft " + meta.minecraftVersion + " (protocol " + meta.protocolVersion
-					+ "), this game uses protocol " + protocol);
+				throw new LocalizedIOException("streamerreplay.error.other_version", meta.minecraftVersion);
 			}
 			return new ReplaySession(file, zip, meta, ReplayArchive.readMarkers(zip), parent);
 		} catch (IOException | RuntimeException e) {

@@ -26,7 +26,7 @@ moment from any angle, fly cinematic camera paths and export them to MP4, all wi
 - **Video export** to MP4 (H.264 through `libx264`, with an automatic MPEG-4 fallback):
   - Rendered frame by frame at a fixed FPS, so output is smooth even on a slow PC.
   - A progress screen shows ETA and a cancel button.
-- **Config screen** (also reachable through Mod Menu). English and German translations.
+- **Config screen** (also reachable through Mod Menu). English and German translations (German fully translated, including errors and Mod Menu texts; a unit test fails the build if any key is missing). Umlauts in world names, replay names and video file names work.
 
 ## Controls (all rebindable under *Options → Controls → Streamer Replay*)
 
@@ -103,7 +103,7 @@ You don't need to take anyone's word for it:
 
   ```
   SHA-256 (streamer-replay-mod-1.0.0.jar)
-  b1a35e2f8c23c19033770a86f78cc392ce709a236b3a67bdd3c00b4582942a7e
+  d98e4ee64e3fbfa0382ced2bf99fc3a985cef4300333ba86b4080d95a407301f
   ```
 
   If the value differs, the file is not the official release. Delete it and download from the official

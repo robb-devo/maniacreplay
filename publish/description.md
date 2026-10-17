@@ -24,7 +24,7 @@ the clip *after* it happened, without having to plan for it.
   - Rendered frame by frame, so the video is perfectly smooth even when your PC is not.
   - A progress screen shows the ETA and has a cancel button.
 - **Crash-safe.** If the game crashes mid-recording, the replay is recovered on the next start.
-- **Settings screen** (also via Mod Menu), in **English and German**.
+- **Settings screen** (also via Mod Menu), in **English and German**. Every text, including errors, is translated natively, and umlauts in replay and video names work.
 
 ## ⚡ Built to stay out of your way
 
@@ -83,4 +83,4 @@ MIT, open source: https://github.com/robb-devo/streamer-replay-mod
 - **Open source.** The full code is on GitHub.
 - **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
 - **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `b1a35e2f8c23c19033770a86f78cc392ce709a236b3a67bdd3c00b4582942a7e`
+  `d98e4ee64e3fbfa0382ced2bf99fc3a985cef4300333ba86b4080d95a407301f`

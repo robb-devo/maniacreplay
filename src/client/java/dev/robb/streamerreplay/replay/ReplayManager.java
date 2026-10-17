@@ -1,5 +1,7 @@
 package dev.robb.streamerreplay.replay;
 
+import dev.robb.streamerreplay.ui.LocalizedIOException;
+
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.render.VideoExporter;
@@ -57,7 +59,7 @@ public final class ReplayManager {
 		} catch (IOException | RuntimeException e) {
 			StreamerReplay.LOGGER.error("Could not open replay {}", file, e);
 			session = null;
-			Notifications.replay(Component.translatable("streamerreplay.toast.open_failed"), Component.literal(String.valueOf(e.getMessage())));
+			Notifications.replay(Component.translatable("streamerreplay.toast.open_failed"), LocalizedIOException.describe(e));
 			mc.gui.setScreen(parent);
 		}
 	}

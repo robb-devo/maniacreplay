@@ -97,7 +97,7 @@ public final class ExportProgressScreen extends Screen {
 		if (exporter.state() == VideoExporter.State.DONE) {
 			g.centeredText(font, Component.literal(exporter.output().getFileName().toString()), cx, cy + 6, Theme.TEXT);
 		} else if (exporter.state() == VideoExporter.State.FAILED && exporter.error() != null) {
-			g.textWithWordWrap(font, Component.literal(exporter.error()), cx - 160, cy + 2, 320, Theme.ERROR);
+			g.textWithWordWrap(font, exporter.error(), cx - 160, cy + 2, 320, Theme.ERROR);
 		} else if (exporter.renderWidth() > 0) {
 			g.centeredText(font, Component.translatable("streamerreplay.export.progress.info", exporter.renderWidth(), exporter.renderHeight(),
 				exporter.usesX264() ? "H.264" : "MPEG-4"), cx, cy + 6, Theme.TEXT_FAINT);

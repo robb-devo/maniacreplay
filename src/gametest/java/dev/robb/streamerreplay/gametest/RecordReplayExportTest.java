@@ -38,6 +38,62 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	 */
 	private static volatile boolean KEEP_TICKING;
 
+	/** Run with -PgametestLang=de_de to test the German UI (screenshots and label fit). */
+	private static final String LANGUAGE = System.getProperty("streamerreplay.gametest.lang", "en_us");
+	private static final String WORLD_NAME = "Prüfwelt Äöü ß";
+	private static final String RENAMED = "Grüße aus der Öl-Straße – Übung";
+	private static final String VIDEO_NAME = "Kamerafahrt Übung.mp4";
+
+	private static void switchLanguage(ClientGameTestContext ctx, String code) {
+		if (code.equals(ctx.computeOnClient(mc -> mc.getLanguageManager().getSelected()))) {
+			return;
+		}
+		java.util.concurrent.CompletableFuture<Void> reload = ctx.computeOnClient(mc -> {
+			mc.getLanguageManager().setSelected(code);
+			mc.options.languageCode = code;
+			return mc.reloadResourcePacks();
+		});
+		ctx.waitFor(mc -> reload.isDone(), 20 * 120);
+		ctx.waitForScreen(TitleScreen.class);
+		ctx.waitTicks(20);
+		String sample = ctx.computeOnClient(mc -> net.minecraft.network.chat.Component.translatable("streamerreplay.browser.watch").getString());
+		StreamerReplay.LOGGER.info("[gametest] language {} active, sample label: {}", code, sample);
+	}
+
+	/**
+	 * Fails if a button or slider label is wider than its widget (vanilla would scroll it, which looks broken).
+	 * 8 px are reserved for the button border.
+	 */
+	private static void checkLabelsFit(ClientGameTestContext ctx, String where) {
+		String problems = ctx.computeOnClient(mc -> {
+			StringBuilder sb = new StringBuilder();
+			var all = net.fabricmc.fabric.api.client.screen.v1.Screens.getWidgets(mc.gui.screen());
+			for (int i = 0; i < all.size(); i++) {
+				for (int j = i + 1; j < all.size(); j++) {
+					var a = all.get(i);
+					var b = all.get(j);
+					if (a.visible && b.visible && a.getX() < b.getX() + b.getWidth() && b.getX() < a.getX() + a.getWidth()
+						&& a.getY() < b.getY() + b.getHeight() && b.getY() < a.getY() + a.getHeight()) {
+						sb.append("overlap '").append(a.getMessage().getString()).append("' / '").append(b.getMessage().getString()).append("'; ");
+					}
+				}
+			}
+			for (var widget : all) {
+				if (widget instanceof net.minecraft.client.gui.components.AbstractButton
+					|| widget instanceof net.minecraft.client.gui.components.AbstractSliderButton) {
+					int text = mc.font.width(widget.getMessage());
+					if (widget.visible && text > widget.getWidth() - 8) {
+						sb.append("'").append(widget.getMessage().getString()).append("' ").append(text).append("px > ")
+							.append(widget.getWidth() - 8).append("px; ");
+					}
+				}
+			}
+			return sb.toString();
+		});
+		StreamerReplay.LOGGER.info("[gametest] label fit {} ({}): {}", where, LANGUAGE, problems.isEmpty() ? "ok" : problems);
+		check(problems.isEmpty(), "labels overflow on " + where + ": " + problems);
+	}
+
 	private static void installTickNudge() {
 		net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
 			net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.beforeExtract(screen).register((sc, g, mx, my, a) -> {
@@ -52,10 +108,12 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	public void runTest(ClientGameTestContext ctx) {
 		ctx.waitForScreen(TitleScreen.class);
 		ctx.runOnClient(mc -> installTickNudge());
+		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
 
 		Vec3 base;
-		try (TestSingleplayerContext sp = ctx.worldBuilder().create()) {
+		// Umlauts and ß in the world name end up in the replay file name and metadata.
+		try (TestSingleplayerContext sp = ctx.worldBuilder().adjustSettings(s -> s.setName(WORLD_NAME)).create()) {
 			sp.getConnection().waitForChunksRender();
 			check(ctx.computeOnClient(mc -> RecordingManager.isRecording()), "recording should start automatically");
 			base = ctx.computeOnClient(mc -> mc.player.position());
@@ -83,18 +141,38 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			ctx.waitTicks(40);
 		}
 		// leaving the world stops and saves the recording in the background
-		Path replay = waitForReplay(ctx);
-		StreamerReplay.LOGGER.info("[gametest] recorded {}", replay);
+		Path recorded = waitForReplay(ctx);
+		StreamerReplay.LOGGER.info("[gametest] recorded {}", recorded);
+		check(recorded.getFileName().toString().contains(WORLD_NAME), "file name should keep the world name with umlauts: " + recorded);
+		check(ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().stream()
+			.anyMatch(i -> i.meta() != null && WORLD_NAME.equals(i.meta().worldName))), "world name with umlauts should survive in the metadata");
+		// rename to a name full of non-ASCII characters; the rest of the test uses the renamed file
+		Path replay;
+		try {
+			replay = dev.robb.streamerreplay.library.ReplayLibrary.rename(recorded, RENAMED);
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+		check(Files.exists(replay) && replay.getFileName().toString().startsWith(RENAMED), "rename with umlauts failed: " + replay);
 
 		ctx.setScreen(() -> new ReplayBrowserScreen(new TitleScreen()));
 		ctx.waitTicks(40);
 		ctx.runOnClient(mc -> mc.gui.toastManager().clear()); // clean gallery shots
 		ctx.waitTicks(2);
 		ctx.takeScreenshot("03_replay_browser");
+		checkLabelsFit(ctx, "browser");
+		ctx.runOnClient(mc -> {
+			var info = dev.robb.streamerreplay.library.ReplayLibrary.scan().getFirst();
+			mc.gui.setScreen(new dev.robb.streamerreplay.ui.RenameReplayScreen(mc.gui.screen(), info, () -> { }));
+		});
+		ctx.waitTicks(5);
+		ctx.takeScreenshot("03b_rename");
+		checkLabelsFit(ctx, "rename");
 
 		ctx.setScreen(() -> new ReplayConfigScreen(new TitleScreen()));
 		ctx.waitTicks(5);
 		ctx.takeScreenshot("04_settings");
+		checkLabelsFit(ctx, "settings");
 
 		ctx.runOnClient(mc -> ReplayManager.open(replay, new ReplayBrowserScreen(new TitleScreen())));
 		waitOrDump(ctx, "replay open", mc -> {
@@ -166,6 +244,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(ctx.computeOnClient(mc -> mc.gui.screen() != null
 			&& mc.gui.screen().getClass().getSimpleName().equals("ReplayPauseScreen")), "Esc should open the replay menu");
 		ctx.takeScreenshot("07c_replay_menu");
+		checkLabelsFit(ctx, "replay menu");
 		ctx.runOnClient(mc -> {
 			mc.gui.setScreen(null);
 			ReplayManager.session().clock().setSpeed(1);
@@ -197,6 +276,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		});
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("08_editor_with_path");
+		checkLabelsFit(ctx, "editor");
 		StreamerReplay.LOGGER.info("[gametest] path overlay: {}", (Object) ctx.<String, RuntimeException>computeOnClient(mc ->
 			dev.robb.streamerreplay.render.PathPreviewRenderer.describeProjection(ReplayManager.session(), mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())));
 		int keyframes = ctx.computeOnClient(mc -> ReplayManager.session().path().size());
@@ -205,8 +285,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.runOnClient(mc -> mc.gui.setScreen(new ExportScreen(ReplayManager.session(), mc.gui.screen())));
 		ctx.waitTicks(40);
 		ctx.takeScreenshot("09_export_settings");
+		checkLabelsFit(ctx, "export");
 
-		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("gametest.mp4"));
+		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve(VIDEO_NAME));
 		ctx.runOnClient(mc -> {
 			ReplayConfig cfg = ReplayConfig.get();
 			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0), true);
@@ -220,8 +301,11 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			VideoExporter e = VideoExporter.current();
 			return e != null && (e.state() == VideoExporter.State.DONE || e.state() == VideoExporter.State.FAILED || e.state() == VideoExporter.State.CANCELLED);
 		}, 20 * 600);
+		ctx.waitTicks(3);
 		ctx.takeScreenshot("11_export_done");
-		String error = ctx.computeOnClient(mc -> VideoExporter.current().state() + " " + VideoExporter.current().error()
+		checkLabelsFit(ctx, "export done");
+		String error = ctx.computeOnClient(mc -> VideoExporter.current().state() + " "
+			+ (VideoExporter.current().error() == null ? "-" : VideoExporter.current().error().getString())
 			+ " frames=" + VideoExporter.current().framesDone() + "/" + VideoExporter.current().totalFrames());
 		StreamerReplay.LOGGER.info("[gametest] export result: {}", error);
 		check(error.startsWith("DONE"), "export failed: " + error);

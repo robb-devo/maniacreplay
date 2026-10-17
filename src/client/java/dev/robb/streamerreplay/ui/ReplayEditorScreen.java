@@ -73,14 +73,17 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		addRenderableWidget(speed);
 
 		int right = width - 8;
-		Button exit = Button.builder(Component.translatable("streamerreplay.editor.exit"), b -> ReplayManager.exit())
-			.bounds(right - 60, y, 60, 20).tooltip(Tooltip.create(Component.translatable("streamerreplay.editor.exit.tooltip"))).build();
+		// "Exit" sits in the top right corner, away from the editing controls (and with room for long translations)
+		Component exitLabel = Component.translatable("streamerreplay.editor.exit");
+		int exitWidth = Math.max(60, font.width(exitLabel) + 12);
+		Button exit = Button.builder(exitLabel, b -> ReplayManager.exit())
+			.bounds(right - exitWidth, 8, exitWidth, 20).tooltip(Tooltip.create(Component.translatable("streamerreplay.editor.exit.tooltip"))).build();
 		addRenderableWidget(exit);
-		int sliderWidth = Math.min(80, Math.max(56, (right - 64 - x - 90) / 2 - 4));
-		rollSlider = addRenderableWidget(new ValueSlider(right - 64 - sliderWidth, y, sliderWidth, 20, -90, 90, 1, session.camera().roll(),
+		int sliderWidth = Math.min(90, Math.max(60, (right - x - 12) / 2 - 2));
+		rollSlider = addRenderableWidget(new ValueSlider(right - sliderWidth, y, sliderWidth, 20, -90, 90, 1, session.camera().roll(),
 			v -> Component.translatable("streamerreplay.editor.roll", (int) v), v -> session.camera().setRoll((float) v)));
 		rollSlider.setTooltip(Tooltip.create(Component.translatable("streamerreplay.editor.roll.tooltip")));
-		fovSlider = addRenderableWidget(new ValueSlider(right - 68 - 2 * sliderWidth, y, sliderWidth, 20, 30, 110, 1, session.camera().fov(),
+		fovSlider = addRenderableWidget(new ValueSlider(right - 4 - 2 * sliderWidth, y, sliderWidth, 20, 30, 110, 1, session.camera().fov(),
 			v -> Component.translatable("streamerreplay.editor.fov", (int) v), v -> session.camera().setFov((float) v)));
 		fovSlider.setTooltip(Tooltip.create(Component.translatable("streamerreplay.editor.fov.tooltip")));
 
@@ -99,9 +102,11 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		previewButton = addRenderableWidget(button("streamerreplay.editor.preview", x, y, null, b -> togglePreview()));
 		x += previewButton.getWidth() + 4;
 		clearButton = addRenderableWidget(button("streamerreplay.editor.clear", x, y, null, b -> confirmClear()));
-		exportButton = addRenderableWidget(Button.builder(Component.translatable("streamerreplay.editor.export"),
+		Component exportLabel = Component.translatable("streamerreplay.editor.export");
+		int exportWidth = Math.max(90, font.width(exportLabel) + 12);
+		exportButton = addRenderableWidget(Button.builder(exportLabel,
 				b -> minecraft.gui.setScreen(new ExportScreen(session, this)))
-			.bounds(right - 90, y, 90, 20).tooltip(Tooltip.create(Component.translatable("streamerreplay.editor.export.tooltip"))).build());
+			.bounds(right - exportWidth, y, exportWidth, 20).tooltip(Tooltip.create(Component.translatable("streamerreplay.editor.export.tooltip"))).build());
 		refreshState();
 	}
 
@@ -290,7 +295,8 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 			: Component.translatable("streamerreplay.editor.path_info", path.size(), TimeFormat.clock(path.durationMs()));
 		g.text(font, info, 8, top - 11, Theme.TEXT, true);
 		Component hint = Component.translatable("streamerreplay.editor.camera_hint");
-		g.text(font, hint, width - 8 - font.width(hint), top - 11, Theme.TEXT_DIM, true);
+		boolean sameLine = 8 + font.width(info) + 12 + font.width(hint) <= width - 8;
+		g.text(font, hint, width - 8 - font.width(hint), sameLine ? top - 11 : top - 22, Theme.TEXT_DIM, true);
 		if (session.isFastForwarding()) {
 			Component seeking = Component.translatable("streamerreplay.hud.seeking", Math.round(session.catchUpProgress() * 100));
 			g.centeredText(font, seeking, width / 2, top / 2, Theme.TEXT);

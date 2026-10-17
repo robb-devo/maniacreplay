@@ -1,5 +1,7 @@
 package dev.robb.streamerreplay.record;
 
+import dev.robb.streamerreplay.ui.LocalizedIOException;
+
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.Marker;
@@ -91,7 +93,7 @@ public final class RecordingManager {
 			}
 		} catch (IOException e) {
 			StreamerReplay.LOGGER.error("Could not start recording", e);
-			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), Component.literal(String.valueOf(e.getMessage())));
+			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), LocalizedIOException.describe(e));
 		}
 	}
 
@@ -134,7 +136,7 @@ public final class RecordingManager {
 		}
 		if (recorder.failure() != null) {
 			StreamerReplay.LOGGER.error("Recording failed", recorder.failure());
-			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), Component.literal(String.valueOf(recorder.failure().getMessage())));
+			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), LocalizedIOException.describe(recorder.failure()));
 			stop(recorder);
 			return;
 		}
@@ -175,7 +177,7 @@ public final class RecordingManager {
 				}
 			} catch (IOException e) {
 				StreamerReplay.LOGGER.error("Could not save replay", e);
-				Notifications.recording(Component.translatable("streamerreplay.toast.save_failed"), Component.literal(String.valueOf(e.getMessage())));
+				Notifications.recording(Component.translatable("streamerreplay.toast.save_failed"), LocalizedIOException.describe(e));
 			}
 		});
 	}

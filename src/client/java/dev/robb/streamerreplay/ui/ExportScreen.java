@@ -60,21 +60,21 @@ public final class ExportScreen extends Screen {
 		addRenderableWidget(CycleButton.<ReplayConfig.ExportResolution>builder(r -> resolutionLabel(r), config.exportResolution)
 			.withValues(ReplayConfig.ExportResolution.values())
 			.withTooltip(r -> Tooltip.create(Component.translatable("streamerreplay.export.resolution.tooltip")))
-			.create(cx - w - 4, y, w, 20, Component.translatable("streamerreplay.export.resolution"), (b, v) -> {
+			.create(cx - w - 4, y, 2 * w + 8, 20, Component.translatable("streamerreplay.export.resolution"), (b, v) -> {
 				config.exportResolution = v;
 				config.save();
 			}));
+		y += 24; // full width: "Window (2560 × 1440)" needs the room, especially in German
 		addRenderableWidget(CycleButton.<Integer>builder(fps -> Component.literal(fps + " FPS"), FPS_CHOICES.contains(config.exportFps) ? config.exportFps : 60)
 			.withValues(FPS_CHOICES)
-			.create(cx + 4, y, w, 20, Component.translatable("streamerreplay.export.fps"), (b, v) -> {
+			.create(cx - w - 4, y, w, 20, Component.translatable("streamerreplay.export.fps"), (b, v) -> {
 				config.exportFps = v;
 				config.save();
 			}));
-		y += 24;
 		addRenderableWidget(CycleButton.<ReplayConfig.ExportQuality>builder(q -> Component.translatable("streamerreplay.export.quality." + q.name().toLowerCase()), config.exportQuality)
 			.withValues(ReplayConfig.ExportQuality.values())
 			.withTooltip(q -> Tooltip.create(Component.translatable("streamerreplay.export.quality.tooltip")))
-			.create(cx - w - 4, y, 2 * w + 8, 20, Component.translatable("streamerreplay.export.quality"), (b, v) -> {
+			.create(cx + 4, y, w, 20, Component.translatable("streamerreplay.export.quality"), (b, v) -> {
 				config.exportQuality = v;
 				config.save();
 			}));

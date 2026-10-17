@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.render;
 
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.StreamerReplay;
 
 import java.io.BufferedOutputStream;
@@ -96,7 +97,7 @@ public final class FfmpegEncoder implements AutoCloseable {
 			}
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			throw new IOException("interrupted");
+			throw new LocalizedIOException("streamerreplay.error.interrupted");
 		}
 	}
 
@@ -113,7 +114,7 @@ public final class FfmpegEncoder implements AutoCloseable {
 			throw failure;
 		}
 		if (!process.isAlive()) {
-			throw new IOException("ffmpeg stopped unexpectedly (exit code " + process.exitValue() + ")");
+			throw new LocalizedIOException("streamerreplay.error.ffmpeg_exit", process.exitValue());
 		}
 	}
 
@@ -146,12 +147,12 @@ public final class FfmpegEncoder implements AutoCloseable {
 			}
 			if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
 				process.destroyForcibly();
-				throw new IOException("ffmpeg did not finish in time");
+				throw new LocalizedIOException("streamerreplay.error.ffmpeg_timeout");
 			}
 			return process.exitValue();
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			throw new IOException("interrupted");
+			throw new LocalizedIOException("streamerreplay.error.interrupted");
 		}
 	}
 

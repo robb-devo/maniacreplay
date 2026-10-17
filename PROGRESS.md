@@ -7,7 +7,7 @@ E2E test: `DISPLAY=:99 timeout 900 ./gradlew runClientGameTest --no-daemon`. Add
 Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (and `screenshots/compat-sodium-lithium-modmenu/`).
 
 ## Status: release candidate 1.0.0
-- Unit tests: 18 (format, recovery, splines, time format).
+- Unit tests: 21 (format, recovery, splines, time format, translations: de_de has every en_us key, matching placeholders, every key used in code exists).
 - The e2e client gametest passes on its own and with Sodium 0.9.3-beta.1, Lithium 0.26.2 and Mod Menu 21.0.0. It covers:
   - SP auto-record, marker, thumbnail, browser, settings
   - replay open, seek forward/back, click-ray follow and unfollow, Esc replay menu
@@ -15,6 +15,9 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (a
   - MP4 export (H.264) to DONE, video > 10 KB
   - dedicated-server recording (TCP, compression 64) and its playback containing server-placed blocks
   - return to the title screen
+  - every main screen checks that each label fits its widget and that widgets do not overlap (browser, rename, settings, replay menu, editor, export, export done)
+  - umlaut names: world "Prüfwelt Äöü ß", rename to "Grüße aus der Öl-Straße – Übung", export to "Kamerafahrt Übung.mp4"
+- German run (`-PgametestLang=de_de`) passes too, also with Sodium + Lithium + Mod Menu. Screenshots: `screenshots/de_de/`, `screenshots/compat-sodium-lithium-modmenu-de_de/`.
 - Docs: README (features, controls, install, safety/checksum, compat, limits), ARCHITECTURE.md, LICENSE (MIT).
 - Publish kit: `publish/` (descriptions EN + DE short, summary, tags, changelog, gallery, 512px icon, jar, SHA256SUMS).
 
@@ -59,6 +62,12 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/` (a
    - Docs checked against the code (speed range 0.1–16×, spline type, folder names).
    - UX: the browser now pre-selects the newest replay, so Watch works with one click.
    - Gallery screenshots no longer have toasts covering the screen titles.
+
+6. **German polish pass.**
+   - Every visible string is translated, including errors, toasts and Mod Menu texts. Error messages come from translation keys, not hard-coded English (LocalizedIOException).
+   - Dates use a locale format (17.10.2026, 21:58), with decimal commas (0,5x) and German quotes.
+   - Overflow found and fixed: settings "Serveradresse speichern" (became "Server-IP speichern"). In the editor, "Replay beenden" moved to the top right and buttons now size to their labels. On the export screen, resolution got its own full-width row.
+   - The editor hint moves up one line if it would collide with the path info.
 
 ## Publishing (needs the user)
 - GitHub: not created or pushed by the agent (needs explicit user approval). Command:

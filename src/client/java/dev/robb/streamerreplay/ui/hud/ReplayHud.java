@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.ui.hud;
 
+import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.render.VideoExporter;
@@ -104,10 +105,8 @@ public final class ReplayHud implements HudElement {
 		}
 	}
 
-	/** 1 -> "1x", 0.25 -> "0.25x", 1.5 -> "1.5x". */
+	/** Speed label in the game language, see {@link GameLocale#speed(double)}. */
 	public static String formatSpeed(double speed) {
-		String text = String.format(java.util.Locale.ROOT, "%.2f", speed);
-		text = text.replaceAll("0+$", "").replaceAll("\\.$", "");
-		return text + "x";
+		return GameLocale.speed(speed);
 	}
 }

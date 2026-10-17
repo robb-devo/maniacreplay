@@ -1,5 +1,9 @@
 package dev.robb.streamerreplay.render;
 
+import net.minecraft.network.chat.Component;
+
+import dev.robb.streamerreplay.ui.LocalizedIOException;
+
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
@@ -49,7 +53,7 @@ public final class VideoExporter {
 	private @Nullable FfmpegEncoder encoder;
 	private final boolean x264;
 	private volatile State state = State.PREPARING;
-	private volatile @Nullable String error;
+	private volatile @Nullable Component error;
 	private int width;
 	private int height;
 	private int framesCaptured;
@@ -117,7 +121,7 @@ public final class VideoExporter {
 			return;
 		}
 		if (encoder != null && encoder.failure() != null) {
-			fail("ffmpeg: " + encoder.failure().getMessage());
+			fail(Component.translatable("streamerreplay.error.ffmpeg", LocalizedIOException.describe(encoder.failure())));
 			return;
 		}
 		if (player.isWaitingForSeek()) {
@@ -169,12 +173,12 @@ public final class VideoExporter {
 				return;
 			}
 		} else if (target.width != width || target.height != height) {
-			fail("The window was resized during the export.");
+			fail(Component.translatable("streamerreplay.error.window_resized"));
 			return;
 		}
 		int frameBytes = width * height * texture.getFormat().blockSize();
 		if (frameBytes != encoder.frameBytes()) {
-			fail("Unsupported framebuffer format: " + texture.getFormat());
+			fail(Component.translatable("streamerreplay.error.framebuffer_format", String.valueOf(texture.getFormat())));
 			return;
 		}
 		GpuBuffer buffer = freeBuffers.poll();
@@ -201,7 +205,7 @@ public final class VideoExporter {
 				framesDelivered++;
 			}
 		} catch (IOException | RuntimeException e) {
-			fail("ffmpeg: " + e.getMessage());
+			fail(Component.translatable("streamerreplay.error.ffmpeg", LocalizedIOException.describe(e)));
 		}
 		if (state == State.RENDERING || state == State.PREPARING) {
 			freeBuffers.push(buffer);
@@ -219,7 +223,7 @@ public final class VideoExporter {
 			encoder = FfmpegEncoder.start(settings, w, h, x264, log);
 			return true;
 		} catch (IOException e) {
-			fail("Could not start ffmpeg: " + e.getMessage());
+			fail(Component.translatable("streamerreplay.error.ffmpeg_start", LocalizedIOException.describe(e)));
 			return false;
 		}
 	}
@@ -232,20 +236,20 @@ public final class VideoExporter {
 		FfmpegEncoder enc = encoder;
 		active = null;
 		if (enc == null) {
-			fail("No frames were rendered.");
+			fail(Component.translatable("streamerreplay.error.no_frames"));
 			return;
 		}
 		CompletableFuture.runAsync(() -> {
 			try {
 				int exit = enc.finish(120);
 				if (exit != 0) {
-					finishAsync(State.FAILED, "ffmpeg exited with code " + exit + " (see the .log file next to the video)");
+					finishAsync(State.FAILED, Component.translatable("streamerreplay.error.ffmpeg_exit", exit));
 				} else {
 					deleteLogIfEmpty();
 					finishAsync(State.DONE, null);
 				}
 			} catch (IOException e) {
-				finishAsync(State.FAILED, "ffmpeg: " + e.getMessage());
+				finishAsync(State.FAILED, Component.translatable("streamerreplay.error.ffmpeg", LocalizedIOException.describe(e)));
 			}
 		});
 	}
@@ -262,9 +266,9 @@ public final class VideoExporter {
 	}
 
 	/** Final state set from the encoding thread; nothing render-thread related is left to clean up. */
-	private void finishAsync(State finalState, @Nullable String message) {
+	private void finishAsync(State finalState, @Nullable Component message) {
 		if (message != null) {
-			StreamerReplay.LOGGER.error("Video export failed: {}", message);
+			StreamerReplay.LOGGER.error("Video export failed: {}", message == null ? null : message.getString());
 		} else {
 			StreamerReplay.LOGGER.info("Video exported to {}", settings.output());
 		}
@@ -272,12 +276,12 @@ public final class VideoExporter {
 		state = finalState;
 	}
 
-	private void fail(String message) {
-		StreamerReplay.LOGGER.error("Video export failed: {}", message);
+	private void fail(Component message) {
+		StreamerReplay.LOGGER.error("Video export failed: {}", message == null ? null : message.getString());
 		stop(State.FAILED, message);
 	}
 
-	private void stop(State finalState, @Nullable String message) {
+	private void stop(State finalState, @Nullable Component message) {
 		if (state == State.DONE || state == State.FAILED || state == State.CANCELLED) {
 			return;
 		}
@@ -316,7 +320,7 @@ public final class VideoExporter {
 		return state;
 	}
 
-	public @Nullable String error() {
+	public @Nullable Component error() {
 		return error;
 	}
 

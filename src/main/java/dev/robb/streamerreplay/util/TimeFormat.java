@@ -27,6 +27,11 @@ public final class TimeFormat {
 
 	/** Formats a byte count as "12.3 MB". */
 	public static String bytes(long bytes) {
+		return bytes(bytes, Locale.ROOT);
+	}
+
+	/** Formats a byte count with the decimal separator of {@code locale}, e.g. "12,3 MB" in German. */
+	public static String bytes(long bytes, Locale locale) {
 		if (bytes < 1024) {
 			return bytes + " B";
 		}
@@ -37,6 +42,6 @@ public final class TimeFormat {
 			value /= 1024;
 			unit++;
 		}
-		return String.format(Locale.ROOT, value >= 100 ? "%.0f %s" : "%.1f %s", value, units[unit]);
+		return String.format(locale, value >= 100 ? "%.0f %s" : "%.1f %s", value, units[unit]);
 	}
 }

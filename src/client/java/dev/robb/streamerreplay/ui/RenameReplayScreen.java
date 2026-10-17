@@ -60,7 +60,7 @@ public final class RenameReplayScreen extends Screen {
 			onRenamed.run();
 			onClose();
 		} catch (IOException e) {
-			error = Component.literal(String.valueOf(e.getMessage()));
+			error = LocalizedIOException.describe(e);
 		}
 	}
 

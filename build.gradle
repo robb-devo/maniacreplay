@@ -129,3 +129,10 @@ tasks.matching { it.name == "runClientGameTest" }.configureEach {
 		jvmArgs("-Dfabric.addMods=" + project.property("compatMods").toString().replace(",", File.pathSeparator))
 	}
 }
+
+// German UI run: ./gradlew runClientGameTest -PgametestLang=de_de
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+	if (project.hasProperty("gametestLang")) {
+		jvmArgs("-Dstreamerreplay.gametest.lang=" + project.property("gametestLang"))
+	}
+}

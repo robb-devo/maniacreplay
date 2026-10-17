@@ -122,7 +122,7 @@ public final class ReplayBrowserScreen extends Screen {
 					ReplayLibrary.delete(selected.file());
 				} catch (IOException e) {
 					StreamerReplay.LOGGER.warn("Could not delete {}", selected.file(), e);
-					Notifications.replay(Component.translatable("streamerreplay.toast.delete_failed"), Component.literal(String.valueOf(e.getMessage())));
+					Notifications.replay(Component.translatable("streamerreplay.toast.delete_failed"), LocalizedIOException.describe(e));
 				}
 				refresh(false);
 			}

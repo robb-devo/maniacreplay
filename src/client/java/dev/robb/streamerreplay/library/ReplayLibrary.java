@@ -1,5 +1,7 @@
 package dev.robb.streamerreplay.library;
 
+import dev.robb.streamerreplay.ui.LocalizedIOException;
+
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.format.ReplayArchive;
 import dev.robb.streamerreplay.format.ReplayFormat;
@@ -76,7 +78,7 @@ public final class ReplayLibrary {
 	public static Path rename(Path file, String newName) throws IOException {
 		Path target = file.resolveSibling(newName.strip() + ReplayFormat.EXTENSION);
 		if (Files.exists(target) && !Files.isSameFile(file, target)) {
-			throw new IOException("A replay with this name already exists");
+			throw new LocalizedIOException("streamerreplay.error.name_taken");
 		}
 		Path moved = Files.move(file, target);
 		Path paths = file.resolveSibling(file.getFileName() + ".paths");

@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.ui.browser;
 
+import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.format.ReplayMeta;
 import dev.robb.streamerreplay.library.ReplayInfo;
 import dev.robb.streamerreplay.ui.Theme;
@@ -26,7 +27,6 @@ import java.util.function.Consumer;
 public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserList.Entry> {
 	static final int THUMB_W = 64;
 	static final int THUMB_H = 36;
-	private static final DateTimeFormatter DATE = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault());
 
 	private ThumbnailCache thumbnails = new ThumbnailCache();
 	private final Consumer<ReplayInfo> onOpen;
@@ -75,6 +75,8 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 		return Math.min(360, width - 20);
 	}
 
+	private static final Component UNREADABLE = Component.translatable("streamerreplay.browser.unreadable");
+
 	final class Entry extends ObjectSelectionList.Entry<Entry> {
 		final ReplayInfo info;
 		private final String subtitle;
@@ -87,9 +89,9 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 				subtitle = "";
 				details = "";
 			} else {
-				String date = DATE.format(Instant.ofEpochMilli(meta.recordedAt > 0 ? meta.recordedAt : info.modifiedMs()));
+				String date = GameLocale.dateFormat().format(Instant.ofEpochMilli(meta.recordedAt > 0 ? meta.recordedAt : info.modifiedMs()));
 				subtitle = date + "  \u00B7  " + TimeFormat.clock(meta.durationMs) + (meta.worldName.isEmpty() ? "" : "  \u00B7  " + meta.worldName);
-				details = TimeFormat.bytes(info.sizeBytes())
+				details = GameLocale.bytes(info.sizeBytes())
 					+ (info.markers() > 0 ? "  \u00B7  " + Component.translatable("streamerreplay.browser.markers", info.markers()).getString() : "")
 					+ "  \u00B7  " + Component.translatable(meta.singleplayer ? "streamerreplay.browser.singleplayer" : "streamerreplay.browser.multiplayer").getString()
 					+ "  \u00B7  " + meta.minecraftVersion;
@@ -116,7 +118,7 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 			int maxWidth = getContentRight() - tx;
 			g.text(font, font.plainSubstrByWidth(info.name(), maxWidth), tx, y + 1, Theme.TEXT, false);
 			if (!info.readable()) {
-				g.text(font, font.plainSubstrByWidth(Component.translatable("streamerreplay.browser.unreadable", info.error()).getString(), maxWidth), tx, y + 13, Theme.ERROR, false);
+				g.text(font, font.plainSubstrByWidth(UNREADABLE.getString(), maxWidth), tx, y + 13, Theme.ERROR, false);
 				return;
 			}
 			g.text(font, font.plainSubstrByWidth(subtitle, maxWidth), tx, y + 13, Theme.TEXT_DIM, false);
