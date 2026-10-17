@@ -45,6 +45,20 @@ public final class ReplayCamera {
 		initialized = true;
 	}
 
+	/**
+	 * First placement when a replay opens: a few blocks behind and above the recorded player, looking at them,
+	 * instead of inside their head.
+	 */
+	private void placeBehind(LocalPlayer player, Minecraft mc) {
+		moveTo(player);
+		double yaw = Math.toRadians(player.getYRot());
+		x += Math.sin(yaw) * 3.5;
+		z -= Math.cos(yaw) * 3.5;
+		y += 1.2;
+		player.setXRot(18);
+		fov = mc.options.fov().get();
+	}
+
 	/** Moves the camera to a pose without touching rotation smoothing state. */
 	public void moveToPose(CameraState pose) {
 		x = pose.x();
@@ -121,7 +135,7 @@ public final class ReplayCamera {
 			return;
 		}
 		if (!initialized) {
-			moveTo(player);
+			placeBehind(player, mc);
 		}
 		if (isSpectatingOther(mc)) {
 			Entity target = mc.getCameraEntity();

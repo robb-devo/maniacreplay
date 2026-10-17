@@ -31,7 +31,7 @@
   "streamerreplay.browser.loading": "Replays werden geladen…",
   "streamerreplay.browser.empty": "Noch keine Replays",
   "streamerreplay.browser.empty_hint": "Einfach spielen: Jede Welt und jeder Server wird automatisch aufgenommen.",
-  "streamerreplay.browser.markers": "%s Markierungen",
+  "streamerreplay.browser.markers": "Markierungen: %s",
   "streamerreplay.browser.singleplayer": "Einzelspieler",
   "streamerreplay.browser.multiplayer": "Mehrspieler",
   "streamerreplay.browser.recovered": "Wiederhergestellt",

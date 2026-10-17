@@ -31,7 +31,7 @@
   "streamerreplay.browser.loading": "Loading replays…",
   "streamerreplay.browser.empty": "No replays yet",
   "streamerreplay.browser.empty_hint": "Just play: every world and server you join is recorded automatically.",
-  "streamerreplay.browser.markers": "%s markers",
+  "streamerreplay.browser.markers": "Markers: %s",
   "streamerreplay.browser.singleplayer": "Singleplayer",
   "streamerreplay.browser.multiplayer": "Multiplayer",
   "streamerreplay.browser.recovered": "Recovered",

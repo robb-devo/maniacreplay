@@ -31,7 +31,8 @@ public final class VideoExporter {
 	public enum State { PREPARING, RENDERING, ENCODING, DONE, FAILED, CANCELLED }
 
 	private static final int MAX_IN_FLIGHT = 3;
-	private static final long FIRST_FRAME_SETTLE_MS = 4000;
+	private static final long FIRST_FRAME_SETTLE_MS = 8000;
+	private static final int FIRST_FRAME_MIN_FRAMES = 30;
 	private static final long FRAME_SETTLE_MS = 250;
 
 	private static @Nullable VideoExporter active;
@@ -57,6 +58,7 @@ public final class VideoExporter {
 	private boolean needsStep;
 	private boolean captureThisFrame;
 	private long settleStart;
+	private int settleFrames;
 
 	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264) {
 		this.session = session;
@@ -136,8 +138,17 @@ public final class VideoExporter {
 			needsStep = false;
 			settleStart = System.currentTimeMillis();
 		}
-		long settleLimit = framesCaptured == 0 ? FIRST_FRAME_SETTLE_MS : FRAME_SETTLE_MS;
-		boolean settled = mc.levelRenderer.hasRenderedAllSections() || System.currentTimeMillis() - settleStart > settleLimit;
+		boolean settled;
+		long waited = System.currentTimeMillis() - settleStart;
+		if (framesCaptured == 0) {
+			// The first frame comes right after a jump: give chunk meshes and fog time to settle completely.
+			settleFrames++;
+			boolean ready = settleFrames > FIRST_FRAME_MIN_FRAMES && mc.levelExtractor.countRenderedSections() > 10
+				&& mc.levelRenderer.hasRenderedAllSections();
+			settled = ready || waited > FIRST_FRAME_SETTLE_MS;
+		} else {
+			settled = mc.levelRenderer.hasRenderedAllSections() || waited > FRAME_SETTLE_MS;
+		}
 		if (settled && inFlight < MAX_IN_FLIGHT) {
 			captureThisFrame = true;
 		}

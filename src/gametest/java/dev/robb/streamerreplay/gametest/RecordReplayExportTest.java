@@ -30,9 +30,26 @@ import java.util.stream.Stream;
  * and export it to MP4 with ffmpeg. Screenshots are written for every step.
  */
 public final class RecordReplayExportTest implements FabricClientGameTest {
+	/**
+	 * The gametest framework only runs test code on frames that tick. A finished export leaves the replay paused
+	 * (no ticks), so while this flag is set a per-frame screen callback nudges the replay clock.
+	 */
+	private static volatile boolean KEEP_TICKING;
+
+	private static void installTickNudge() {
+		net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) ->
+			net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.beforeExtract(screen).register((sc, g, mx, my, a) -> {
+				ReplaySession s = ReplayManager.session();
+				if (KEEP_TICKING && !VideoExporter.isExporting() && s != null && !s.clock().isPlaying()) {
+					s.clock().setSpeed(0.25);
+					s.clock().setPlaying(true);
+				}
+			}));
+	}
 	@Override
 	public void runTest(ClientGameTestContext ctx) {
 		ctx.waitForScreen(TitleScreen.class);
+		ctx.runOnClient(mc -> installTickNudge());
 		ctx.takeScreenshot("01_title_screen");
 
 		Vec3 base;
@@ -76,7 +93,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.takeScreenshot("04_settings");
 
 		ctx.runOnClient(mc -> ReplayManager.open(replay, new ReplayBrowserScreen(new TitleScreen())));
-		ctx.waitFor(mc -> {
+		waitOrDump(ctx, "replay open", mc -> {
 			ReplaySession s = ReplayManager.session();
 			return s != null && s.isCaughtUp(mc) && mc.gui.screen() == null;
 		}, 20 * 60);
@@ -126,7 +143,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.runOnClient(mc -> {
 			ReplayConfig cfg = ReplayConfig.get();
 			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0), true);
-			mc.gui.setScreen(new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session())));
+			var progress = new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session()));
+			mc.gui.setScreen(progress);
+			KEEP_TICKING = true;
 		});
 		ctx.waitTicks(20);
 		ctx.takeScreenshot("10_export_progress");
@@ -145,10 +164,12 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			throw new AssertionError(e);
 		}
 
+		KEEP_TICKING = false;
 		ctx.runOnClient(mc -> ReplayManager.exit());
 		ctx.waitForScreen(ReplayBrowserScreen.class);
 		ctx.waitTicks(20);
 		ctx.takeScreenshot("12_back_in_browser");
+		ctx.setScreen(TitleScreen::new);
 		StreamerReplay.LOGGER.info("[gametest] ALL CHECKS PASSED");
 	}
 
@@ -160,7 +181,19 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 
 	private static void waitCaughtUp(ClientGameTestContext ctx) {
 		ctx.waitTicks(2);
-		ctx.waitFor(mc -> ReplayManager.session() != null && ReplayManager.session().isCaughtUp(mc), 20 * 60);
+		waitOrDump(ctx, "catch up", mc -> ReplayManager.session() != null && ReplayManager.session().isCaughtUp(mc), 20 * 60);
+	}
+
+	private static void waitOrDump(ClientGameTestContext ctx, String what, java.util.function.Predicate<net.minecraft.client.Minecraft> condition, int timeout) {
+		try {
+			ctx.waitFor(condition, timeout);
+		} catch (AssertionError e) {
+			String state = ctx.computeOnClient(mc -> ReplayManager.session() == null ? "no session, screen=" + mc.gui.screen()
+				: ReplayManager.session().debugState(mc));
+			StreamerReplay.LOGGER.error("[gametest] timed out waiting for {}: {}", what, state);
+			ctx.takeScreenshot("timeout_" + what.replace(' ', '_'));
+			throw e;
+		}
 	}
 
 	private static Path waitForReplay(ClientGameTestContext ctx) {

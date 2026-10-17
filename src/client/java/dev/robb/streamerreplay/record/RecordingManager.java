@@ -168,7 +168,7 @@ public final class RecordingManager {
 				Path saved = recorder.finish();
 				if (saved != null) {
 					StreamerReplay.LOGGER.info("Replay saved: {}", saved);
-					Notifications.recording(Component.translatable("streamerreplay.toast.replay_saved"), Component.literal(saved.getFileName().toString()));
+					Notifications.recording(Component.translatable("streamerreplay.toast.replay_saved"), Component.literal(dev.robb.streamerreplay.library.ReplayLibrary.displayName(saved)));
 				} else {
 					StreamerReplay.LOGGER.info("Discarded empty recording {}", recorder.recordingFile().getFileName());
 				}

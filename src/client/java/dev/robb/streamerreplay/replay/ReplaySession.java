@@ -60,6 +60,7 @@ public final class ReplaySession {
 	private boolean closed;
 	private boolean restarting;
 	private @Nullable CameraState restorePose;
+	private @Nullable Screen restoreScreen;
 	private @Nullable PathPlayer pathPlayer;
 	private long lastFrameNanos = -1;
 
@@ -159,7 +160,12 @@ public final class ReplaySession {
 		} else if (worldVisible) {
 			clock.update(now);
 		} else {
-			clock.hold(now); // do not run away while the world is still being built
+			// While the world is being built the clock follows the data: it neither runs away nor stalls on the
+			// gap before the next recorded packet (e.g. login at 0 ms, first chunks at 600 ms).
+			clock.hold(now);
+			if (hasFrame && reader.time() > clock.timeMs() && !channel.awaitingProtocolSwitch()) {
+				clock.setTime(reader.time());
+			}
 		}
 		if (isInWorld(mc) && clock.timeMs() < deliveredUntil - 1) {
 			restart();
@@ -172,6 +178,13 @@ public final class ReplaySession {
 				camera.setPose(restorePose);
 				camera.moveToPose(restorePose);
 				restorePose = null;
+			}
+			if (restoreScreen != null) {
+				Screen screen = restoreScreen;
+				restoreScreen = null;
+				if (mc.gui.screen() == null) {
+					mc.gui.setScreen(screen); // e.g. the editor that was open when seeking backwards
+				}
 			}
 			camera.update(mc, dtSeconds);
 		}
@@ -221,6 +234,10 @@ public final class ReplaySession {
 		try {
 			if (camera.isInitialized()) {
 				restorePose = camera.pose();
+			}
+			Screen current = mc.gui.screen();
+			if (current != null && !(current instanceof ReplayLoadingScreen) && !(current instanceof LevelLoadingScreen)) {
+				restoreScreen = current;
 			}
 			ReplayChannel old = channel;
 			mc.disconnect(new ReplayLoadingScreen(this), true, false);
@@ -281,6 +298,15 @@ public final class ReplaySession {
 	public float catchUpProgress() {
 		double target = clock.timeMs();
 		return target <= 0 ? 1 : (float) Math.min(1.0, deliveredUntil / target);
+	}
+
+	/** One-line state summary for logs and bug reports. */
+	public String debugState(Minecraft mc) {
+		return "time=" + (long) clock.timeMs() + " playing=" + clock.isPlaying() + " delivered=" + deliveredUntil
+			+ " next=" + (hasFrame ? reader.time() : -1) + " inWorld=" + isInWorld(mc)
+			+ " awaitingSwitch=" + (channel != null && channel.awaitingProtocolSwitch()) + " open=" + (channel != null && channel.isOpen())
+			+ " screen=" + (mc.gui.screen() == null ? "none" : mc.gui.screen().getClass().getSimpleName())
+			+ " level=" + (mc.level != null) + " player=" + (mc.player != null) + " listener=" + (mc.getConnection() != null);
 	}
 
 	public ReplayChannel channel() {
