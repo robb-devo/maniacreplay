@@ -6,6 +6,7 @@ import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.ReplayArchive;
 import dev.robb.streamerreplay.format.ReplayFormat;
 import dev.robb.streamerreplay.format.ReplayMeta;
+import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.util.TimeFormat;
@@ -168,7 +169,7 @@ public final class RecordingManager {
 				Path saved = recorder.finish();
 				if (saved != null) {
 					StreamerReplay.LOGGER.info("Replay saved: {}", saved);
-					Notifications.recording(Component.translatable("streamerreplay.toast.replay_saved"), Component.literal(dev.robb.streamerreplay.library.ReplayLibrary.displayName(saved)));
+					Notifications.recording(Component.translatable("streamerreplay.toast.replay_saved"), Component.literal(ReplayLibrary.displayName(saved)));
 				} else {
 					StreamerReplay.LOGGER.info("Discarded empty recording {}", recorder.recordingFile().getFileName());
 				}

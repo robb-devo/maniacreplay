@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.ui;
 
+import dev.robb.streamerreplay.render.PathPreviewRenderer;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.path.CameraPath;
 import dev.robb.streamerreplay.replay.CameraControlScreen;
@@ -272,7 +273,8 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	@Override
 	public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
-		// The world stays fully visible behind the editor.
+		// The world stays fully visible behind the editor; only the camera path is drawn over it.
+		PathPreviewRenderer.draw(g, font, session, width, height);
 	}
 
 	@Override

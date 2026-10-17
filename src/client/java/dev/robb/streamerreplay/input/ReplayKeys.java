@@ -3,6 +3,7 @@ package dev.robb.streamerreplay.input;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.record.RecordingManager;
+import dev.robb.streamerreplay.replay.EntityPicker;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.ReplayEditorScreen;
@@ -55,7 +56,7 @@ public final class ReplayKeys {
 	 * runs no game ticks, and K must still be able to resume it. Key presses only arrive while no screen is open.
 	 */
 	public static void handleReplayKeys(Minecraft mc, ReplaySession session) {
-		dev.robb.streamerreplay.replay.EntityPicker.handleClicks(mc, session);
+		EntityPicker.handleClicks(mc, session);
 		while (PLAY_PAUSE.consumeClick()) {
 			togglePlayback(session);
 		}

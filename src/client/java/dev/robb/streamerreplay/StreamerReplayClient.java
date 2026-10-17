@@ -4,7 +4,6 @@ import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.library.RecoveryService;
 import dev.robb.streamerreplay.record.RecordingManager;
-import dev.robb.streamerreplay.render.PathPreviewRenderer;
 import dev.robb.streamerreplay.ui.TitleScreenButton;
 import dev.robb.streamerreplay.ui.hud.RecordingIndicatorHud;
 import dev.robb.streamerreplay.ui.hud.ReplayHud;
@@ -13,7 +12,6 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
 import dev.robb.streamerreplay.replay.EntityPicker;
@@ -35,7 +33,6 @@ public final class StreamerReplayClient implements ClientModInitializer {
 		});
 		ScreenEvents.AFTER_INIT.register(TitleScreenButton::onScreenInit);
 		ClientPreAttackCallback.EVENT.register(EntityPicker::onAttack);
-		LevelExtractionEvents.AFTER_BLOCK_OUTLINE_EXTRACTION.register((context, hit) -> PathPreviewRenderer.extract());
 
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> RecoveryService.recoverAsync());
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> RecordingManager.shutdown());

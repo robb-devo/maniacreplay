@@ -195,6 +195,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		});
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("08_editor_with_path");
+		StreamerReplay.LOGGER.info("[gametest] path overlay: {}", (Object) ctx.<String, RuntimeException>computeOnClient(mc ->
+			dev.robb.streamerreplay.render.PathPreviewRenderer.describeProjection(ReplayManager.session(), mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())));
 		int keyframes = ctx.computeOnClient(mc -> ReplayManager.session().path().size());
 		check(keyframes == 3, "expected 3 keyframes, got " + keyframes);
 
