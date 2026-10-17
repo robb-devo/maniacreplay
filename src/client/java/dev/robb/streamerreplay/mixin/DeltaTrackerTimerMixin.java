@@ -4,6 +4,7 @@ import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -26,8 +27,10 @@ abstract class DeltaTrackerTimerMixin {
 	@Inject(method = "advanceGameTime", at = @At("HEAD"), cancellable = true)
 	private void streamerreplay$replayTime(long currentMs, CallbackInfoReturnable<Integer> cir) {
 		ReplaySession session = ReplayManager.session();
-		if (session == null || !session.isInWorld(Minecraft.getInstance()) || (Object) this != Minecraft.getInstance().getDeltaTracker()) {
-			return;
+		Minecraft mc = Minecraft.getInstance();
+		if (session == null || (Object) this != mc.getDeltaTracker() || !session.isInWorld(mc)
+			|| mc.gui.screen() instanceof LevelLoadingScreen) {
+			return; // the loading screen only closes from a game tick, so it keeps real time
 		}
 		int ticks = session.advanceTicks();
 		deltaTicks = session.deltaTicks();

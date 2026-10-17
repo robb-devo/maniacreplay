@@ -186,7 +186,13 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.runOnClient(mc -> key(ReplayManager.session(), new CameraState(b.x, b.y + 9, b.z - 9, 0, 35, 5, 60)));
 		ctx.waitTicks(40);
 		ctx.runOnClient(mc -> key(ReplayManager.session(), new CameraState(b.x + 9, b.y + 5, b.z - 2, 45, 20, 0, 80)));
-		ctx.runOnClient(mc -> mc.gui.setScreen(new ReplayEditorScreen(ReplayManager.session())));
+		ctx.runOnClient(mc -> {
+			// step back so the whole path (drawn in the world while the editor is open) is in view
+			CameraState overview = new CameraState(b.x, b.y + 14, b.z - 22, 0, 30, 0, 70);
+			ReplayManager.session().camera().setPose(overview);
+			ReplayManager.session().camera().moveToPose(overview);
+			mc.gui.setScreen(new ReplayEditorScreen(ReplayManager.session()));
+		});
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("08_editor_with_path");
 		int keyframes = ctx.computeOnClient(mc -> ReplayManager.session().path().size());
