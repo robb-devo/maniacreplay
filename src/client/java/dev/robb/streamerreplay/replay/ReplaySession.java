@@ -41,6 +41,11 @@ import java.util.zip.ZipFile;
  * possible with a packet stream, so the world is rebuilt from the start and fast-forwarded to the target.
  */
 public final class ReplaySession {
+	/**
+	 * Per-frame time for delivering packets. Measured (seek benchmark, 93 s busy replay): a 100 ms budget during
+	 * seeks was not faster than 25 ms, because a backward seek is dominated by the fixed reconnect + level-load
+	 * cost (~0.4 s), not by packet delivery (~1.3 ms per replay second). So one budget that keeps the game fluid.
+	 */
 	private static final long FAST_FORWARD_BUDGET_NANOS = 25_000_000L;
 	private static final long CATCH_UP_THRESHOLD_MS = 1500;
 

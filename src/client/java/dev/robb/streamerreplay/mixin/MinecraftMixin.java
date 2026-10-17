@@ -49,6 +49,11 @@ abstract class MinecraftMixin {
 				var camera = mc.gameRenderer.mainCamera();
 				camera.attributeProbe().tick(mc.level, camera.position());
 			}
+			// The level-load tracker is ticked by the game mode, which a paused tick skips: without this a world
+			// rebuild (backward seek) while the replay is paused would stay on the loading screen forever.
+			if (mc.getConnection() != null && mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) {
+				mc.getConnection().tick();
+			}
 		}
 	}
 

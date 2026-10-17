@@ -102,6 +102,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			recoverPhase(ctx);
 			return;
 		}
+		if (MODE.equals("seekbench")) {
+			seekBenchmark(ctx);
+			return;
+		}
 		ctx.waitForScreen(TitleScreen.class);
 		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
@@ -200,6 +204,18 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		waitCaughtUp(ctx);
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("06_after_seek_forward");
+		long seekStart = System.nanoTime();
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.2));
+		waitCaughtUp(ctx);
+		StreamerReplay.LOGGER.info("[gametest] backward seek 70% -> 20% (world rebuild) took {} ms", (System.nanoTime() - seekStart) / 1_000_000);
+		seekStart = System.nanoTime();
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.95));
+		waitCaughtUp(ctx);
+		StreamerReplay.LOGGER.info("[gametest] forward seek 20% -> 95% took {} ms", (System.nanoTime() - seekStart) / 1_000_000);
+		seekStart = System.nanoTime();
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.9));
+		waitCaughtUp(ctx);
+		StreamerReplay.LOGGER.info("[gametest] backward seek 95% -> 90% (world rebuild) took {} ms", (System.nanoTime() - seekStart) / 1_000_000);
 		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.2));
 		waitCaughtUp(ctx);
 		ctx.waitTicks(10);
@@ -441,6 +457,57 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		StreamerReplay.LOGGER.info("[gametest] CRASH RECOVERY CHECKS PASSED");
 	}
 
+	/**
+	 * Measures backward seeks in a longer, busier replay (90 s, 40 wandering mobs, the player moving):
+	 * -PcrashPhase is not used; run with -PgametestProps=streamerreplay.gametest.mode=seekbench.
+	 * Also guards against a paused replay getting stuck on the loading screen after a backward seek.
+	 */
+	private static void seekBenchmark(ClientGameTestContext ctx) {
+		ctx.waitForScreen(TitleScreen.class);
+		Path folder = ctx.computeOnClient(mc -> StreamerReplay.replayFolder());
+		try (TestSingleplayerContext sp = ctx.worldBuilder().adjustSettings(s -> s.setName("Seek Bench")).create()) {
+			sp.getConnection().waitForChunksRender();
+			Vec3 p = ctx.computeOnClient(mc -> mc.player.position());
+			sp.getServer().runCommand("time set noon");
+			for (int i = 0; i < 40; i++) {
+				sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:%s %.1f %.1f %.1f", i % 2 == 0 ? "sheep" : "chicken",
+					p.x + (i % 8) * 2 - 8, p.y, p.z + (i / 8) * 2 + 4));
+			}
+			for (int i = 0; i < 90; i++) {
+				sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 6.0) * 12, p.y, p.z + Math.sin(i / 6.0) * 12, i * 4));
+				ctx.waitTicks(20);
+			}
+		}
+		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == 1 && list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 60);
+		Path replay = list(folder, ReplayFormat.EXTENSION).getFirst();
+		ctx.runOnClient(mc -> ReplayManager.open(replay, new ReplayBrowserScreen(new TitleScreen())));
+		waitOrDump(ctx, "bench replay open", mc -> ReplayManager.session() != null && ReplayManager.session().isCaughtUp(mc) && mc.gui.screen() == null, 20 * 120);
+		double duration = ctx.computeOnClient(mc -> (double) ReplayManager.session().clock().durationMs());
+		long size;
+		try {
+			size = Files.size(replay);
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+		ctx.runOnClient(mc -> ReplayManager.session().clock().setPlaying(false));
+		StringBuilder results = new StringBuilder();
+		for (double[] seek : new double[][] {{0.98, 0.9}, {0.98, 0.5}, {0.98, 0.1}, {0.1, 0.98}}) {
+			ctx.runOnClient(mc -> ReplayManager.session().seek(duration * seek[0]));
+			waitCaughtUp(ctx);
+			ctx.waitTicks(5);
+			long start = System.nanoTime();
+			ctx.runOnClient(mc -> ReplayManager.session().seek(duration * seek[1]));
+			waitCaughtUp(ctx);
+			long ms = (System.nanoTime() - start) / 1_000_000;
+			results.append(String.format(java.util.Locale.ROOT, " %d%%->%d%%: %d ms;", (int) (seek[0] * 100), (int) (seek[1] * 100), ms));
+		}
+		StreamerReplay.LOGGER.info("[gametest] SEEK BENCH replay {} s, {} KB:{}",
+			(long) (duration / 1000), size / 1024, results);
+		ctx.runOnClient(mc -> ReplayManager.exit());
+		ctx.waitForScreen(ReplayBrowserScreen.class);
+		ctx.setScreen(TitleScreen::new);
+	}
+
 	private static void pausedInteraction(ClientGameTestContext ctx, double duration) {
 		// Near the end of the recording the pig is guaranteed to exist (it was summoned early on).
 		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.85));
@@ -510,6 +577,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == mc.player), "Shift should return to the free camera");
 		double timeNow = ctx.computeOnClient(mc -> ReplayManager.session().clock().timeMs());
 		check(Math.abs(timeNow - frozenAt) < 1, "replay time should not move while paused: " + frozenAt + " -> " + timeNow);
+		// a backward seek while paused rebuilds the world; it must leave the loading screen and stay paused
+		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.5));
+		waitCaughtUp(ctx);
+		check(ctx.computeOnClient(mc -> !ReplayManager.session().clock().isPlaying()), "the replay should stay paused after seeking back");
 		ctx.runOnClient(mc -> ReplayManager.session().clock().setPlaying(true));
 	}
 
