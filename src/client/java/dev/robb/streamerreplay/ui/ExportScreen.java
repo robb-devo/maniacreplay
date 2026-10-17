@@ -33,7 +33,7 @@ public final class ExportScreen extends Screen {
 	private EditBox ffmpegBox;
 	private Button startButton;
 	private @Nullable CompletableFuture<FfmpegProbe.Result> probe;
-	private @Nullable FfmpegProbe.Result probeResult;
+	private FfmpegProbe.@Nullable Result probeResult;
 	private String probedPath;
 
 	public ExportScreen(ReplaySession session, Screen parent) {

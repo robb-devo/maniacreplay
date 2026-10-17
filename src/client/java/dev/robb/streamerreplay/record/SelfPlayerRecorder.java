@@ -11,7 +11,7 @@ import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.network.protocol.game.ClientboundSwingAnimationPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.Mth;
-import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.PositionPath;
@@ -75,7 +75,7 @@ final class SelfPlayerRecorder {
 		Vec3 pos = player.position();
 		recorder.writeSynthetic(new ClientboundAddEntityPacket(
 			player.getId(), player.getUUID(), pos.x, pos.y, pos.z, player.getXRot(), player.getYRot(),
-			EntityType.PLAYER, 0, Vec3.ZERO, player.getYHeadRot()));
+			EntityTypes.PLAYER, 0, Vec3.ZERO, player.getYHeadRot()));
 		List<SynchedEntityData.DataValue<?>> data = player.getEntityData().getNonDefaultValues();
 		if (data != null && !data.isEmpty()) {
 			recorder.writeSynthetic(new ClientboundSetEntityDataPacket(player.getId(), data));
