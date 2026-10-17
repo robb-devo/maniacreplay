@@ -16,11 +16,13 @@ import net.minecraft.network.chat.Component;
 public final class ReplayKeys {
 	public static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(StreamerReplay.id("main"));
 
+	// Defaults avoid every vanilla 26.3 binding (including F3 debug combos and creative toolbar keys) and the
+	// defaults of Iris (R, K, I), Sodium and Mod Menu. J/U sit together on QWERTY and QWERTZ alike.
 	public static final KeyMapping MARKER = key("marker", InputConstants.KEY_M);
 	public static final KeyMapping STOP_RECORDING = key("stop_recording", InputConstants.UNKNOWN.getValue());
-	public static final KeyMapping PLAY_PAUSE = key("play_pause", InputConstants.KEY_K);
-	public static final KeyMapping EDITOR = key("editor", InputConstants.KEY_O);
-	public static final KeyMapping KEYFRAME = key("keyframe", InputConstants.KEY_I);
+	public static final KeyMapping PLAY_PAUSE = key("play_pause", InputConstants.KEY_DOWN);
+	public static final KeyMapping EDITOR = key("editor", InputConstants.KEY_J);
+	public static final KeyMapping KEYFRAME = key("keyframe", InputConstants.KEY_U);
 	public static final KeyMapping SEEK_BACK = key("seek_back", InputConstants.KEY_LEFT);
 	public static final KeyMapping SEEK_FORWARD = key("seek_forward", InputConstants.KEY_RIGHT);
 

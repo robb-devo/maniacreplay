@@ -53,7 +53,9 @@ public final class VideoExporter {
 	private final ArrayDeque<GpuBuffer> freeBuffers = new ArrayDeque<>();
 	private final long startedAt = System.currentTimeMillis();
 
-	private @Nullable FfmpegEncoder encoder;
+	private @Nullable FrameSink encoder;
+	/** No ffmpeg: write a PNG image sequence instead of a video. */
+	private final boolean pngSequence;
 	private final boolean x264;
 	private volatile State state = State.PREPARING;
 	private volatile @Nullable Component error;
@@ -69,13 +71,14 @@ public final class VideoExporter {
 	private long settleStart;
 	private int settleFrames;
 
-	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264) {
+	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, dev.robb.streamerreplay.path.CameraPath path) {
+		this.pngSequence = pngSequence;
 		this.session = session;
 		this.settings = withRenderSize(settings);
 		this.x264 = x264;
 		this.frameMs = 1000.0 / settings.fps();
-		this.totalFrames = (int) Math.floor(session.path().durationMs() / frameMs) + 1;
-		this.player = session.playPathForExport();
+		this.totalFrames = (int) Math.floor(path.durationMs() / frameMs) + 1;
+		this.player = session.playPathForExport(path);
 	}
 
 	/**
@@ -106,8 +109,18 @@ public final class VideoExporter {
 
 	/** Starts an export of the session's camera path. Render thread. */
 	public static VideoExporter start(ReplaySession session, ExportSettings settings, boolean x264) {
+		return start(session, settings, x264, false);
+	}
+
+	/** {@code pngSequence}: ffmpeg is missing, so frames are saved as numbered PNG files instead. */
+	public static VideoExporter start(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence) {
+		return start(session, settings, x264, pngSequence, session.path());
+	}
+
+	/** {@code path}: the camera path to render, e.g. a fixed shot when the user has no path yet. */
+	public static VideoExporter start(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, dev.robb.streamerreplay.path.CameraPath path) {
 		cancel();
-		VideoExporter exporter = new VideoExporter(session, settings, x264);
+		VideoExporter exporter = new VideoExporter(session, settings, x264, pngSequence, path);
 		active = exporter;
 		last = exporter;
 		int[] size = gpuRenderSize(exporter.settings.outputWidth(), exporter.settings.outputHeight());
@@ -259,7 +272,11 @@ public final class VideoExporter {
 		width = w;
 		height = h;
 		try {
-			Files.createDirectories(settings.output().getParent());
+			Files.createDirectories(settings.output().toAbsolutePath().getParent());
+			if (pngSequence) {
+				encoder = PngSequenceWriter.start(settings.output(), w, h);
+				return true;
+			}
 			Path log = settings.output().resolveSibling(settings.output().getFileName() + ".log");
 			encoder = FfmpegEncoder.start(settings, w, h, x264, log);
 			return true;
@@ -275,7 +292,7 @@ public final class VideoExporter {
 		RenderResolution.end();
 		session.stopPath();
 		releaseBuffers();
-		FfmpegEncoder enc = encoder;
+		FrameSink enc = encoder;
 		active = null;
 		if (enc == null) {
 			fail(Component.translatable("streamerreplay.error.no_frames"));
@@ -285,7 +302,8 @@ public final class VideoExporter {
 			try {
 				int exit = enc.finish(120);
 				if (exit != 0) {
-					finishAsync(State.FAILED, Component.translatable("streamerreplay.error.ffmpeg_exit", exit));
+					IOException reason = enc instanceof FfmpegEncoder ffmpeg ? ffmpeg.exitError(exit) : null;
+					finishAsync(State.FAILED, reason != null ? LocalizedIOException.describe(reason) : Component.translatable("streamerreplay.error.ffmpeg_exit", exit));
 				} else {
 					deleteLogIfEmpty();
 					finishAsync(State.DONE, null);
@@ -305,6 +323,10 @@ public final class VideoExporter {
 		} catch (IOException ignored) {
 			// cosmetic only
 		}
+	}
+
+	public boolean isPngSequence() {
+		return pngSequence;
 	}
 
 	/** Final state set from the encoding thread; nothing render-thread related is left to clean up. */
@@ -368,7 +390,7 @@ public final class VideoExporter {
 	}
 
 	public Path output() {
-		return settings.output();
+		return pngSequence ? PngSequenceWriter.folderFor(settings.output()) : settings.output();
 	}
 
 	public int totalFrames() {

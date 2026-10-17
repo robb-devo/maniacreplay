@@ -403,8 +403,13 @@ public final class ReplaySession {
 
 	/** Starts deterministic path playback driven by an external frame clock (video export). */
 	public PathPlayer playPathForExport() {
+		return playPathForExport(path);
+	}
+
+	/** Deterministic playback of {@code exportPath} (the session's path, or a fixed shot without keyframes). */
+	public PathPlayer playPathForExport(CameraPath exportPath) {
 		clock.setPlaying(false);
-		pathPlayer = new PathPlayer(path, true);
+		pathPlayer = new PathPlayer(exportPath, true);
 		pathPlayer.begin(this);
 		return pathPlayer;
 	}

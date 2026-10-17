@@ -45,10 +45,10 @@ moment from any angle, fly cinematic camera paths and export them to MP4, all wi
 | Key | Action |
 | --- | --- |
 | M | Add marker (while recording) |
-| K | Play / pause the replay |
+| ↓ (arrow down) | Play / pause the replay |
 | ← / → | Back / forward 5 s |
-| O | Open the camera path editor |
-| I | Add a camera keyframe at the current view |
+| J | Open the camera path editor |
+| U | Add a camera keyframe at the current view |
 | Left click | Follow the entity under the crosshair (Shift leaves) |
 | WASD + Space/Shift | Fly the free camera (scroll changes speed) |
 | Esc | Replay menu (back to replay, editor, settings, exit) |
@@ -56,13 +56,22 @@ moment from any angle, fly cinematic camera paths and export them to MP4, all wi
 
 In the editor, **right-drag** looks around and **WASD** flies.
 
+The defaults are chosen so they clash with nothing in vanilla 26.3 (including F3 combos) and nothing in Iris,
+Sodium or Mod Menu. If you used 1.1.0, your old keys (K/O/I) stay in your options until you reset them under
+*Controls*.
+
+**First export in 10 seconds:** you don't need a camera path. Open the replay, press **J**, click *Export*: without
+keyframes it films from your current camera for the length you pick (10 s, 30 s, 60 s or to the end). Without ffmpeg
+the export still works and saves PNG images (the help screen shows how to get MP4).
+
 ## Install
 
 1. Install Fabric Loader **0.19.5+** for Minecraft **26.3**, and **Fabric API 0.163.0+26.3**.
-2. Put `streamer-replay-mod-1.1.0.jar` into `.minecraft/mods`.
+2. Put `streamer-replay-mod-1.1.1.jar` into `.minecraft/mods`.
 3. Optional:
    - [Mod Menu](https://modrinth.com/mod/modmenu) to open the config from the mod list.
-   - **ffmpeg** for video export. Install it the usual way (`winget install ffmpeg`, `brew install ffmpeg`, your
+   - **ffmpeg** for MP4 export (without it you get a PNG image sequence, and the export screen explains how to
+     install it with one click on *Help*). Install it the usual way (`winget install ffmpeg`, `brew install ffmpeg`, your
      Linux package manager) or unzip it into `.minecraft/ffmpeg/`. It is found automatically, even when the
      launcher does not see your terminal's PATH. You can also enter the full path. The export screen tells you
      whether ffmpeg was found.
@@ -114,16 +123,16 @@ You don't need to take anyone's word for it:
 - **The only program it starts is ffmpeg**, on your own PC, and only when you click *Export Video*. You
   install ffmpeg yourself and can choose its path in the settings.
 - **Scan the jar yourself.** Go to <https://www.virustotal.com>, choose *File*, and upload
-  `streamer-replay-mod-1.1.0.jar`. Dozens of virus scanners check it at once. You can also paste the checksum
+  `streamer-replay-mod-1.1.1.jar`. Dozens of virus scanners check it at once. You can also paste the checksum
   below into VirusTotal's *Search* tab to see earlier scans of exactly this file.
 - **Make sure you have the original file.** Compare its SHA-256 checksum with the one published here and in
   the release notes:
-  - **Windows** (PowerShell): `Get-FileHash streamer-replay-mod-1.1.0.jar -Algorithm SHA256`
-  - **macOS / Linux**: `shasum -a 256 streamer-replay-mod-1.1.0.jar` or `sha256sum streamer-replay-mod-1.1.0.jar`
+  - **Windows** (PowerShell): `Get-FileHash streamer-replay-mod-1.1.1.jar -Algorithm SHA256`
+  - **macOS / Linux**: `shasum -a 256 streamer-replay-mod-1.1.1.jar` or `sha256sum streamer-replay-mod-1.1.1.jar`
 
   ```
-  SHA-256 (streamer-replay-mod-1.1.0.jar)
-  2b3c5b71a673c319fb32235f0b8dee4ee8f271eb384637b2e383c38e4c1791af
+  SHA-256 (streamer-replay-mod-1.1.1.jar)
+  6f8ec69679f2e1331b5001a073b3ed9269e1f0d53c5efcde7f714f779a455548
   ```
 
   If the value differs, the file is not the official release. Delete it and download from the official

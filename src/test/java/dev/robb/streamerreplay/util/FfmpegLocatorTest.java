@@ -88,6 +88,12 @@ class FfmpegLocatorTest {
 	}
 
 	@Test
+	void windowsFindsZipUnpackedIntoGameFolder() {
+		String exe = WIN_GAME + "\\ffmpeg\\ffmpeg-7.1-full_build\\bin\\ffmpeg.exe";
+		assertEquals(exe, win(exe));
+	}
+
+	@Test
 	void windowsCustomPathsAreRespected() {
 		FakeFs fs = new FakeFs('\\', "D:\\tools\\ffmpeg.exe");
 		assertEquals("D:\\tools\\ffmpeg.exe", FfmpegLocator.resolve("\"D:\\tools\\ffmpeg.exe\"", Os.WINDOWS, WIN_ENV, WIN_GAME, fs));

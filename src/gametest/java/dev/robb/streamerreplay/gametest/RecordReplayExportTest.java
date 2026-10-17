@@ -107,6 +107,22 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			return;
 		}
 		ctx.waitForScreen(TitleScreen.class);
+		String conflicts = ctx.computeOnClient(mc -> {
+			StringBuilder sb = new StringBuilder();
+			for (net.minecraft.client.KeyMapping ours : mc.options.keyMappings) {
+				if (!ours.getName().startsWith("key.streamerreplay.") || ours.isUnbound()) {
+					continue;
+				}
+				for (net.minecraft.client.KeyMapping other : mc.options.keyMappings) {
+					if (other != ours && other.same(ours)) {
+						sb.append(ours.getName()).append(" = ").append(other.getName()).append("; ");
+					}
+				}
+			}
+			return sb.toString();
+		});
+		StreamerReplay.LOGGER.info("[gametest] key conflicts: {}", conflicts.isEmpty() ? "none" : conflicts);
+		check(conflicts.isEmpty(), "default keys conflict: " + conflicts);
 		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
 
@@ -298,6 +314,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 
 		nativeResolutionExport(ctx);
 		cleanFramesExport(ctx, b);
+		noFfmpegNoPathExport(ctx);
 
 		ctx.runOnClient(mc -> ReplayManager.exit());
 		ctx.waitForScreen(ReplayBrowserScreen.class);
@@ -687,6 +704,45 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		long changed = differingPixels(firstFrame(plain), firstFrame(clean));
 		StreamerReplay.LOGGER.info("[gametest] clean frames: {} pixels differ between overlays on/hidden", changed);
 		check(changed > 300, "hiding name tags and hitboxes should visibly change the frame (" + changed + " px)");
+	}
+
+	/**
+	 * A beginner's first export: no camera path and no ffmpeg. The help screen must open by itself, the start button
+	 * must stay clickable ("Export PNG Images") and produce a 10 s PNG sequence from the current camera.
+	 */
+	private static void noFfmpegNoPathExport(ClientGameTestContext ctx) {
+		ctx.runOnClient(mc -> {
+			ReplayManager.session().clearPath();
+			ReplayManager.session().seek(1000);
+			ReplayConfig.get().ffmpegPath = "/nonexistent/ffmpeg";
+			ReplayConfig.get().exportFps = 30;
+		});
+		waitCaughtUp(ctx);
+		ctx.runOnClient(mc -> mc.gui.setScreen(new ExportScreen(ReplayManager.session(), null)));
+		ctx.waitForScreen(dev.robb.streamerreplay.ui.FfmpegHelpScreen.class);
+		ctx.waitTicks(10);
+		ctx.takeScreenshot("11b_ffmpeg_help");
+		checkLabelsFit(ctx, "ffmpeg help");
+		ctx.runOnClient(mc -> mc.gui.screen().onClose());
+		ctx.waitForScreen(ExportScreen.class);
+		ctx.waitTicks(10);
+		ctx.takeScreenshot("11c_export_without_path_and_ffmpeg");
+		checkLabelsFit(ctx, "export without path/ffmpeg");
+		ctx.clickScreenButton("streamerreplay.export.start_png");
+		ctx.waitFor(mc -> {
+			VideoExporter e = VideoExporter.current();
+			return e != null && e.isPngSequence() && (e.state() == VideoExporter.State.DONE || e.state() == VideoExporter.State.FAILED);
+		}, 20 * 600);
+		String result = ctx.computeOnClient(mc -> VideoExporter.current().state() + " " + VideoExporter.current().output());
+		Path folder = ctx.computeOnClient(mc -> VideoExporter.current().output());
+		long pngs = list(folder, ".png").size();
+		StreamerReplay.LOGGER.info("[gametest] PNG export without ffmpeg/path: {} -> {} PNG files", result, pngs);
+		check(result.startsWith("DONE") && pngs == 301, "PNG export should write 301 frames (10 s at 30 FPS): " + result + ", " + pngs);
+		ctx.runOnClient(mc -> {
+			ReplayConfig.get().ffmpegPath = "ffmpeg";
+			mc.gui.setScreen(null);
+		});
+		ctx.waitTicks(5);
 	}
 
 	private static String ffprobe(Path video) {

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1 (Minecraft 26.3, Fabric)
+
+- **New default keys that clash with nothing**: play/pause **↓**, camera editor **J**, keyframe **U** (marker stays **M**,
+  seek ← / →). The old K/O/I clashed with vanilla (O = Friends) and Iris (K, I). Every default is checked against all
+  vanilla 26.3 bindings (including F3 combos) and Iris/Sodium/Mod Menu, and an automated test now fails on any
+  conflict. If you already played 1.1.0, your saved keys stay until you reset them under *Controls*.
+- **Export is never greyed out any more**: buttons stay clickable and say why when something is missing.
+- **Export without a camera path**: with no keyframes, Export films from your current camera for 10 s, 30 s, 60 s
+  or to the end.
+- **Without ffmpeg, export saves PNG images** (a "… (PNG frames)" folder) instead of failing. A help screen (opens by
+  itself the first time) explains `winget install ffmpeg` or unzipping into `.minecraft/ffmpeg`, with a button to open
+  the download page (only when you click it) and one to open the ffmpeg folder. Unzipped builds in subfolders are found.
+- **Real ffmpeg error messages**: when ffmpeg stops, the game and the log show its exit code and last error line
+  (also for the Windows "pipe is being closed" case). The output folder is created reliably, and paths with spaces or
+  umlauts are tested.
+
 ## 1.1.0 (Minecraft 26.3, Fabric)
 
 - **Paused replays are fully interactive**: mouse look, flying and click-to-follow work while paused. The world stays

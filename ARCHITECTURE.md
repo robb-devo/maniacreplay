@@ -158,3 +158,7 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 - `scripts/crash-recovery-test.sh` kills the game with SIGKILL mid-recording, restarts it and checks the recovered replay.
 - Recording a session that is already running is deliberately not supported (see README, *Known limitations*); the
   game explains how to record instead.
+
+## 1.1.1
+
+- `render/FrameSink` abstracts the encoder; `FfmpegEncoder` (MP4) and `PngSequenceWriter` (fallback, writer thread, pooled buffers) implement it. Without a camera path, `ExportScreen` builds a temporary two-keyframe path at the current pose and hands it to `VideoExporter`/`ReplaySession.playPathForExport(CameraPath)`.

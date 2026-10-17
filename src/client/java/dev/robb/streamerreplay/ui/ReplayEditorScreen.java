@@ -195,9 +195,11 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		prevButton.active = !path.isEmpty() && selected != 0;
 		nextButton.active = !path.isEmpty() && selected < path.size() - 1;
 		previewButton.active = path.isPlayable();
+		// never greyed out without a reason
+		previewButton.setTooltip(path.isPlayable() ? null : Tooltip.create(Component.translatable("streamerreplay.editor.preview.needs_keyframes", ReplayKeys.KEYFRAME.getTranslatedKeyMessage())));
 		previewButton.setMessage(Component.translatable(session.isPlayingPath() ? "streamerreplay.editor.stop_preview" : "streamerreplay.editor.preview"));
 		clearButton.active = !path.isEmpty();
-		exportButton.active = path.isPlayable();
+		// export always works: without a camera path it films from the current camera view
 		boolean playing = session.clock().isPlaying() || session.isPlayingPath();
 		playButton.setMessage(Component.literal(playing ? "||" : "\u25B6"));
 	}

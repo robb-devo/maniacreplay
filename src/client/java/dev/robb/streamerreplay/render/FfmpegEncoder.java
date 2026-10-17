@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * <p>Frame buffers are pooled: {@link #borrow()} hands out a recycled array and the writer thread returns it after
  * writing, so a long export allocates only a handful of frame-sized arrays.
  */
-public final class FfmpegEncoder implements AutoCloseable {
+public final class FfmpegEncoder implements FrameSink {
 	private static final byte[] END = new byte[0];
 	private static final int QUEUE = 4;
 
@@ -31,10 +31,12 @@ public final class FfmpegEncoder implements AutoCloseable {
 	private final Thread writer;
 	private volatile IOException failure;
 	private volatile long framesWritten;
+	private final Path logFile;
 
-	private FfmpegEncoder(int frameBytes, Process process) {
+	private FfmpegEncoder(int frameBytes, Process process, Path logFile) {
 		this.frameBytes = frameBytes;
 		this.process = process;
+		this.logFile = logFile;
 		this.stdin = new BufferedOutputStream(process.getOutputStream(), 1 << 20);
 		this.writer = Thread.ofPlatform().name("StreamerReplay-ffmpeg-writer").daemon().start(this::writeLoop);
 	}
@@ -43,11 +45,17 @@ public final class FfmpegEncoder implements AutoCloseable {
 	public static FfmpegEncoder start(ExportSettings settings, int width, int height, boolean x264, Path logFile) throws IOException {
 		List<String> cmd = command(settings, width, height, x264);
 		StreamerReplay.LOGGER.info("Starting video export: {}", String.join(" ", cmd));
-		Process process = new ProcessBuilder(cmd)
-			.redirectErrorStream(true)
-			.redirectOutput(logFile.toFile())
-			.start();
-		return new FfmpegEncoder(width * height * 4, process);
+		Process process;
+		try {
+			process = new ProcessBuilder(cmd)
+				.redirectErrorStream(true)
+				.redirectOutput(logFile.toFile())
+				.start();
+		} catch (IOException e) {
+			StreamerReplay.LOGGER.error("Could not start ffmpeg '{}'", cmd.getFirst(), e);
+			throw e;
+		}
+		return new FfmpegEncoder(width * height * 4, process, logFile);
 	}
 
 	static List<String> command(ExportSettings settings, int width, int height, boolean x264) {
@@ -78,6 +86,7 @@ public final class FfmpegEncoder implements AutoCloseable {
 		return vf.toString();
 	}
 
+	@Override
 	public int frameBytes() {
 		return frameBytes;
 	}
@@ -114,7 +123,7 @@ public final class FfmpegEncoder implements AutoCloseable {
 			throw failure;
 		}
 		if (!process.isAlive()) {
-			throw new LocalizedIOException("streamerreplay.error.ffmpeg_exit", process.exitValue());
+			throw exitError(process.exitValue());
 		}
 	}
 
@@ -131,10 +140,43 @@ public final class FfmpegEncoder implements AutoCloseable {
 			}
 			stdin.close();
 		} catch (IOException e) {
+			// on Windows a crashed ffmpeg shows up as "The pipe is being closed": report ffmpeg's own reason instead
+			try {
+				if (process.waitFor(2, TimeUnit.SECONDS)) {
+					failure = exitError(process.exitValue());
+					return;
+				}
+			} catch (InterruptedException ignored) {
+				Thread.currentThread().interrupt();
+			}
 			failure = e;
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 		}
+	}
+
+	/** The error for a stopped ffmpeg, with the last line of its log as the reason. Also goes to the game log. */
+	public IOException exitError(int exitCode) {
+		String reason = lastLogLine();
+		StreamerReplay.LOGGER.error("ffmpeg stopped with exit code {}: {} (full log: {})", exitCode, reason, logFile);
+		return reason.isEmpty()
+			? new LocalizedIOException("streamerreplay.error.ffmpeg_exit", exitCode)
+			: new LocalizedIOException("streamerreplay.error.ffmpeg_exit_reason", exitCode, reason);
+	}
+
+	private String lastLogLine() {
+		try {
+			java.util.List<String> lines = new String(java.nio.file.Files.readAllBytes(logFile), java.nio.charset.StandardCharsets.UTF_8).lines().toList();
+			for (int i = lines.size() - 1; i >= 0; i--) {
+				String line = lines.get(i).strip();
+				if (!line.isEmpty()) {
+					return line.length() > 160 ? line.substring(0, 160) + "…" : line;
+				}
+			}
+		} catch (IOException | RuntimeException ignored) {
+			// no log, or not UTF-8 (then fall back to the exit code alone)
+		}
+		return "";
 	}
 
 	/** Closes the input and waits for ffmpeg to finish writing the file. Returns ffmpeg's exit code. */

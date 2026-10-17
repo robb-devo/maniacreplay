@@ -14,7 +14,7 @@ the clip *after* it happened, without having to plan for it.
   - Thumbnails, world name, date, duration and marker count.
   - Rename and delete with one click.
 - **Watch like a video.**
-  - Play/pause (**K**), ±5 s (**← / →**), speed from 0.1× to 16×.
+  - Play/pause (**↓**), ±5 s (**← / →**), speed from 0.1× to 16×.
   - A timeline you can scrub.
 - **Free camera.** Fly anywhere. **Click any player or mob to follow them** (Shift returns to the free camera).
   All of this also works **while paused**: the world freezes, you keep looking around, flying and picking targets.
@@ -53,10 +53,10 @@ work without ffmpeg.
 | Key | Action |
 | --- | --- |
 | M | Add marker while recording |
-| K | Play / pause |
+| ↓ | Play / pause |
 | ← / → | Back / forward 5 seconds |
-| O | Camera path editor |
-| I | Add camera keyframe |
+| J | Camera path editor |
+| U | Add camera keyframe |
 | Left click | Follow the entity under the crosshair |
 | Esc | Replay menu |
 
@@ -88,4 +88,4 @@ MIT, open source: https://github.com/robb-devo/streamer-replay-mod
 - **Open source.** The full code is on GitHub.
 - **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
 - **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `2b3c5b71a673c319fb32235f0b8dee4ee8f271eb384637b2e383c38e4c1791af`
+  `6f8ec69679f2e1331b5001a073b3ed9269e1f0d53c5efcde7f714f779a455548`

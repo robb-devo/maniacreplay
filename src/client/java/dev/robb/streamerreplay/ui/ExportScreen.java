@@ -35,6 +35,12 @@ public final class ExportScreen extends Screen {
 	private @Nullable CompletableFuture<FfmpegProbe.Result> probe;
 	private FfmpegProbe.@Nullable Result probeResult;
 	private String probedPath;
+	/** Shown under the buttons when Start cannot run right now (never a silently greyed-out button). */
+	private @Nullable Component blockedReason;
+	private Button helpButton;
+	private static final List<Integer> SHOT_SECONDS = List.of(10, 30, 60, 0); // 0 = until the end of the replay
+	private int shotSeconds = 10;
+	private static boolean helpShown;
 
 	public ExportScreen(ReplaySession session, Screen parent) {
 		super(Component.translatable("streamerreplay.export.title"));
@@ -79,21 +85,34 @@ public final class ExportScreen extends Screen {
 				config.save();
 			}));
 		y += 24;
+		boolean noPath = !session.path().isPlayable();
+		if (noPath) {
+			// no camera path yet: film a fixed shot from the current camera, for a chosen length
+			addRenderableWidget(CycleButton.<Integer>builder(sec -> sec == 0
+					? Component.translatable("streamerreplay.export.length.to_end")
+					: Component.translatable("streamerreplay.export.length.seconds", sec), shotSeconds)
+				.withValues(SHOT_SECONDS)
+				.withTooltip(v -> Tooltip.create(Component.translatable("streamerreplay.export.length.tooltip")))
+				.create(cx - w - 4, y, w, 20, Component.translatable("streamerreplay.export.length"), (b, v) -> shotSeconds = v));
+		}
 		addRenderableWidget(CycleButton.onOffBuilder(config.exportCleanFrames)
 			.withTooltip(v -> Tooltip.create(Component.translatable("streamerreplay.export.clean_frames.tooltip")))
-			.create(cx - w - 4, y, 2 * w + 8, 20, Component.translatable("streamerreplay.export.clean_frames"), (b, v) -> {
+			.create(noPath ? cx + 4 : cx - w - 4, y, noPath ? w : 2 * w + 8, 20, Component.translatable(noPath ? "streamerreplay.export.clean_frames.short" : "streamerreplay.export.clean_frames"), (b, v) -> {
 				config.exportCleanFrames = v;
 				config.save();
 			}));
 		y += 34;
 
-		ffmpegBox = new EditBox(font, cx - w - 4, y, 2 * w + 8 - 64, 20, Component.translatable("streamerreplay.export.ffmpeg"));
+		ffmpegBox = new EditBox(font, cx - w - 4, y, 2 * w + 8 - 128, 20, Component.translatable("streamerreplay.export.ffmpeg"));
 		ffmpegBox.setMaxLength(1024);
 		ffmpegBox.setValue(config.ffmpegPath);
 		ffmpegBox.setTooltip(Tooltip.create(Component.translatable("streamerreplay.export.ffmpeg.tooltip")));
 		addRenderableWidget(ffmpegBox);
 		addRenderableWidget(Button.builder(Component.translatable("streamerreplay.export.check"), b -> startProbe(true))
-			.bounds(cx + w + 4 - 60, y, 60, 20).build());
+			.bounds(cx + w + 4 - 124, y, 60, 20).build());
+		helpButton = addRenderableWidget(Button.builder(Component.translatable("streamerreplay.export.ffmpeg_help"), b -> minecraft.gui.setScreen(new FfmpegHelpScreen(this)))
+			.bounds(cx + w + 4 - 60, y, 60, 20)
+			.tooltip(Tooltip.create(Component.translatable("streamerreplay.export.ffmpeg_help.tooltip"))).build());
 		y += 40;
 
 		startButton = addRenderableWidget(Button.builder(Component.translatable("streamerreplay.export.start"), b -> startExport())
@@ -133,15 +152,32 @@ public final class ExportScreen extends Screen {
 		if (probe != null && probe.isDone()) {
 			probeResult = probe.join();
 			probe = null;
+			blockedReason = null;
+			if (!probeResult.ok() && !helpShown) {
+				helpShown = true; // impossible to miss: explain once per game session, right away
+				minecraft.gui.setScreen(new FfmpegHelpScreen(this));
+			}
 		}
 		String path = ffmpegBox.getValue().trim();
 		if (!path.equals(probedPath) && !ffmpegBox.isFocused()) {
 			startProbe(false);
 		}
-		startButton.active = session.path().isPlayable() && probeResult != null && probeResult.ok() && !nameBox.getValue().isBlank();
+		// Start stays clickable; what it will do (video, or PNG images without ffmpeg) is on its label
+		startButton.setMessage(Component.translatable(probeResult != null && !probeResult.ok() ? "streamerreplay.export.start_png" : "streamerreplay.export.start"));
+		startButton.setTooltip(probeResult != null && !probeResult.ok() ? Tooltip.create(Component.translatable("streamerreplay.export.start_png.tooltip")) : null);
 	}
 
 	private void startExport() {
+		if (nameBox.getValue().isBlank()) {
+			blockedReason = Component.translatable("streamerreplay.export.blocked.name");
+			setFocused(nameBox);
+			return;
+		}
+		if (probeResult == null) {
+			blockedReason = Component.translatable("streamerreplay.export.blocked.checking");
+			return;
+		}
+		boolean png = !probeResult.ok();
 		ReplayConfig config = ReplayConfig.get();
 		config.ffmpegPath = ffmpegBox.getValue().trim().isEmpty() ? "ffmpeg" : ffmpegBox.getValue().trim();
 		config.save();
@@ -153,7 +189,22 @@ public final class ExportScreen extends Screen {
 		}
 		ExportSettings settings = new ExportSettings(output, config.ffmpegPath, config.exportFps, config.exportQuality,
 			config.exportResolution.width, config.exportResolution.height, config.exportCleanFrames);
-		VideoExporter.start(session, settings, probeResult != null && probeResult.hasX264());
+		dev.robb.streamerreplay.path.CameraPath path = session.path();
+		if (!path.isPlayable()) {
+			// fixed shot from the current camera: from now for the chosen length
+			long from = (long) session.clock().timeMs();
+			long total = session.clock().durationMs();
+			long to = shotSeconds == 0 ? total : Math.min(total, from + shotSeconds * 1000L);
+			if (to - from < 500) { // at the very end: take the last seconds instead
+				from = Math.max(0, to - Math.max(1000L, shotSeconds * 1000L));
+			}
+			var pose = session.camera().pose();
+			path = new dev.robb.streamerreplay.path.CameraPath();
+			path.addAt(from, pose);
+			path.addAt(to, pose);
+		}
+		StreamerReplay.LOGGER.info("Export {} ({}), path of {} ms", output, png ? "PNG frames, no ffmpeg" : "video", path.durationMs());
+		VideoExporter.start(session, settings, probeResult.hasX264(), png, path);
 		minecraft.gui.setScreen(new ExportProgressScreen(parent));
 	}
 
@@ -164,8 +215,9 @@ public final class ExportScreen extends Screen {
 		int top = Math.max(52, height / 2 - 80);
 		g.centeredText(font, title, cx, top - 44, Theme.TEXT);
 		long frames = (long) Math.floor(session.path().durationMs() * ReplayConfig.get().exportFps / 1000.0) + 1;
-		g.centeredText(font, Component.translatable("streamerreplay.export.summary", session.path().size(),
-			TimeFormat.clock(session.path().durationMs()), frames), cx, top - 31, Theme.TEXT_DIM);
+		g.centeredText(font, session.path().isPlayable()
+			? Component.translatable("streamerreplay.export.summary", session.path().size(), TimeFormat.clock(session.path().durationMs()), frames)
+			: Component.translatable("streamerreplay.export.summary_no_path"), cx, top - 31, session.path().isPlayable() ? Theme.TEXT_DIM : Theme.TEXT);
 		g.text(font, Component.translatable("streamerreplay.export.file_name"), cx - 154, top - 11, Theme.TEXT_FAINT, false);
 
 		int ffmpegY = top + 34 + 24 + 24 + 34;
@@ -183,6 +235,9 @@ public final class ExportScreen extends Screen {
 			color = Theme.ERROR;
 		}
 		g.centeredText(font, status, cx, ffmpegY + 25, color);
+		if (blockedReason != null) {
+			g.centeredText(font, blockedReason, cx, startButton.getY() + 24, Theme.ERROR);
+		}
 	}
 
 	@Override

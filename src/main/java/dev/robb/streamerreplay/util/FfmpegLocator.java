@@ -129,6 +129,10 @@ public final class FfmpegLocator {
 			out.add(join(os, gameDir, "ffmpeg", "bin", exe));
 			out.add(join(os, gameDir, "ffmpeg", exe));
 			out.add(join(os, gameDir, exe));
+			for (String unzipped : fs.subdirectories(join(os, gameDir, "ffmpeg"))) { // e.g. ffmpeg/ffmpeg-7.1-full_build/bin
+				out.add(join(os, unzipped, "bin", exe));
+				out.add(join(os, unzipped, exe));
+			}
 		}
 		// 3. where the usual installers put it
 		switch (os) {
