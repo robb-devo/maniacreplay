@@ -114,7 +114,7 @@
   "streamerreplay.export.progress.failed": "Export fehlgeschlagen",
   "streamerreplay.export.progress.cancelled": "Export abgebrochen",
   "streamerreplay.export.progress.info": "%s × %s · %s",
-  "streamerreplay.config.title": "Streamer-Replay-Einstellungen",
+  "streamerreplay.config.title": "ManiacReplay-Einstellungen",
   "streamerreplay.config.section.recording": "Aufnahme",
   "streamerreplay.config.section.replay": "Replay",
   "streamerreplay.config.section.export": "Video-Export",

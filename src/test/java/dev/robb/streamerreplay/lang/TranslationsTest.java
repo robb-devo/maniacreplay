@@ -59,6 +59,20 @@ class TranslationsTest {
 	}
 
 	@Test
+	void modNameStaysTheSame() throws IOException {
+		JsonObject en = load("en_us.json");
+		JsonObject de = load("de_de.json");
+		List<String> problems = new ArrayList<>();
+		for (String key : en.keySet()) {
+			String d = de.has(key) ? de.get(key).getAsString() : "";
+			if (en.get(key).getAsString().contains("ManiacReplay") && !d.contains("ManiacReplay")) {
+				problems.add(key + " (" + d + ")");
+			}
+		}
+		assertTrue(problems.isEmpty(), "German texts that lost the mod name: " + problems);
+	}
+
+	@Test
 	void everyKeyUsedInCodeExists() throws IOException {
 		JsonObject en = load("en_us.json");
 		TreeSet<String> missing = new TreeSet<>();
