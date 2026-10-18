@@ -130,8 +130,12 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 2. **Native resolution.** `RenderResolution` tells the game its framebuffer has the export size (for example 1920×1080,
    or 1080×1920 for vertical video), so the world, post effects, shader packs and GUI all render at that size into the
    normal main target. Only the very last step changes: the finished image is scaled to the real window for the
-   on-screen preview, letterboxed with black bars when the shapes differ. A window resize only re-applies the virtual
-   size. Sizes above the GPU's texture limit are clamped and scaled by ffmpeg.
+   on-screen preview, letterboxed with black bars when the shapes differ (`RenderResolution.fit`). On OpenGL the
+   picture is drawn straight into its centred rectangle (a render area becomes the viewport); on Vulkan it is scaled
+   into a texture of that size and copied into place. The other way round fails: Vulkan keeps the full viewport for a
+   render area, and OpenGL's texture copy treats the size as end coordinates. The end-to-end test reads the preview
+   back and checks the picture's position on both backends. A window resize only re-applies the virtual size. Sizes
+   above the GPU's texture limit are clamped and scaled by ffmpeg.
 3. **Clean frames.** `CleanFrames` is on while an export with "hide name tags & overlays" runs. Small hooks then
    drop name tags (`EntityRendererMixin`), the block outline (`LevelExtractorMixin`) and debug gizmos such as hitboxes
    (`DebugRendererMixin`), and mark the HUD hidden (which also hides the hand). The 2D HUD and menus are never in the

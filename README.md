@@ -109,9 +109,11 @@ recordings and key bindings survive the rename.
 ## Compatibility
 
 The mixins are small injections (`@Inject`, one `@ModifyArg`, one accessor; no `@Overwrite` or `@Redirect`), and
-every hook returns at once when no replay is open. The full end-to-end test passes on Windows 11 with a real GPU,
-in English and German. Version 1.1 also passed it with Sodium 0.9.3-beta.1, Lithium 0.26.2, Mod Menu 21.0.0, and
-with Iris 1.11.7 and the MakeUp UltraFast shader pack (Linux, OpenGL). macOS has not been tested.
+every hook returns at once when no replay is open. The full end-to-end test passes on Windows 11 with an NVIDIA GPU,
+on both graphics backends (OpenGL and Vulkan) and in English and German. On Vulkan it does not resize the window: in
+Minecraft 26.3 that loses the Vulkan device even on the title screen, with no replay open. Version 1.1 also passed
+it with Sodium 0.9.3-beta.1, Lithium 0.26.2, Mod Menu 21.0.0, and with Iris 1.11.7 and the MakeUp UltraFast shader
+pack (Linux, OpenGL). macOS has not been tested.
 
 Please report problems with your exact mod list and `logs/latest.log`.
 
@@ -125,13 +127,14 @@ Please report problems with your exact mod list and `logs/latest.log`.
 The unit tests cover the file format and crash recovery, camera path interpolation, the clean-up rule, time
 formatting, ffmpeg discovery on Windows, macOS and Linux, and that German has every English text.
 
-The end-to-end test records a singleplayer world and a dedicated server (including a trip to the Nether), uses
-the recording switch, browses, renames, seeks, follows entities, looks around and clicks while paused, builds a
-camera path, exports at window size, native 1080p and 1080 × 1920 (checked with ffprobe and a sharpness
-measurement), compares clean frames, clicks through the editor with real mouse input and checks that every label
-fits its button. Options:
+The end-to-end test records a singleplayer world and a dedicated server (including a trip to the Nether), uses the
+recording switch, browses, renames, seeks, follows entities, looks around and clicks while paused, builds a camera
+path, exports at window size, native 1080p and 1080 × 1920 (checked with ffprobe and a sharpness measurement),
+compares clean frames, checks the window preview of an export to the pixel, clicks through the editor with real
+mouse input and checks that every label fits its button. Options:
 
 - `-PgametestLang=de_de` runs it in German.
+- `-PgraphicsApi=vulkan` (or `opengl`) chooses Minecraft's graphics backend.
 - `-PcompatMods=a.jar,b.jar` loads other mods, `-PshaderPack=pack.zip` enables an Iris shader pack.
 - `-PgametestProps=streamerreplay.gametest.mode=seekfile,streamerreplay.gametest.replay=/path/to/x.sreplay`
   measures seek times on any recording.

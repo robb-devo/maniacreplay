@@ -3,6 +3,23 @@
 All notable changes. Versions follow [Semantic Versioning](https://semver.org/); every release targets
 Minecraft 26.3 with Fabric.
 
+## 1.2.2
+
+### Fixed
+- The window preview during a vertical (1080 × 1920) export, or any export whose shape differs from the window,
+  showed the picture squeezed into a thin strip on OpenGL. The exported video itself was always correct. Minecraft's
+  OpenGL backend treats the size of a texture copy as end coordinates, so the preview now scales the picture straight
+  into its centred rectangle there, and keeps the copy on Vulkan, where it is exact.
+
+### Tests
+- The end-to-end test reads the picture the window shows during an export and checks its position to the pixel,
+  for a vertical export (bars left and right) and a 16:9 export in a narrower window (bars above and below), and
+  checks that the vertical video is filled edge to edge.
+- `-PgraphicsApi=vulkan` runs the end-to-end test on Vulkan; it passes on OpenGL and Vulkan (NVIDIA).
+
+**SHA-256** of `maniacreplay-1.2.2.jar`:
+`0e8a3df78d7255f954391df3502d24bb09f636af78723b5e61af04f0bdcb246e`
+
 ## 1.2.1
 
 ### Fixed
