@@ -1,66 +1,29 @@
 # ManiacReplay
 
-A replay mod for **Minecraft 26.3 (Fabric)**, made for streamers. It records every session on its own, lets you
-watch any moment again from any angle, and turns it into a smooth MP4, without setup or a tutorial.
+[![build](https://github.com/robb-devo/maniacreplay/actions/workflows/build.yml/badge.svg)](https://github.com/robb-devo/maniacreplay/actions/workflows/build.yml)
 
-## Getting started
+A replay mod for Minecraft 26.3 (Fabric). It records every session on its own, lets you watch any moment again
+from any angle, and exports smooth MP4 videos. It is built for streamers: there is nothing to set up.
 
-1. Install Fabric Loader **0.19.5+** and **Fabric API 0.163.0+** for Minecraft 26.3 and put
-   `maniacreplay-1.2.0.jar` into `.minecraft/mods`. Java 25 is required, the same as Minecraft 26.3.
-2. Play. Recording starts when you join a world or server and is saved when you leave. Press **M** at a great
-   moment to set a marker.
-3. On the title screen, click the film-strip button next to *Accessibility*. Pick a replay, or click one of its
-   **⚑ markers** to start 10 seconds before that moment.
-4. In the replay press **J** for the editor and click *Export Video*. The first time, the export screen offers to
-   install ffmpeg with one click (Windows); after that you get MP4 files.
+## Requirements
 
-Just want to play without recording? Open the pause menu and switch **Recording** (top left) off. It stays off
-until you switch it back on.
+- Minecraft 26.3, Fabric Loader 0.19.5 or newer, Fabric API 0.163.0 or newer, Java 25.
+- Client only. It works on any server; the server does not need it.
+- Optional: [Mod Menu](https://modrinth.com/mod/modmenu) for the settings button in the mod list, ffmpeg for MP4
+  export (the mod can install it on Windows).
 
-## Features
+## Using it
 
-**Recording**
-- Automatic in singleplayer and on servers, saved when you leave. A small `● REC 12:34 ⚑2` badge shows while
-  recording (can be hidden); it lights up gold when you set a marker, so no toast pops up on stream.
-- One switch for on/off: in the pause menu, in the settings ("Record: Everywhere / Worlds only / Servers only /
-  Off") and on an optional hotkey.
-- Runs off-thread: packets are copied into pooled buffers and compressed and written by a background thread.
-  With nothing recording, the cost is one volatile read per packet.
-- Crash-safe: an unfinished recording is recovered on the next start (tested by killing the game with `SIGKILL`).
-- Cleans up after itself: replays older than 30 days are deleted unless they have a marker or a name you gave
-  them. Choose Never, 7, 14, 30 or 90 days in the settings.
+1. Put `maniacreplay-<version>.jar` into `.minecraft/mods` and play. Recording starts when you join a world or a
+   server and is saved when you leave. A small `● REC` badge shows that it is running.
+2. Press **M** at a moment worth keeping. Markers show up in the replay list and on the timeline.
+3. On the title screen, click the film-strip button next to *Accessibility*. Click a replay to watch it, or click
+   one of its ⚑ markers to start 10 seconds before that moment.
+4. Press **J** in a replay to open the editor and click *Export Video*. Without a camera path it films from the
+   current view; without ffmpeg it offers to install it (Windows) or saves PNG frames.
 
-**Watching**
-- Play/pause, 0.1× to 16× speed, a timeline you can drag, ±5 s jumps.
-- Free camera with smooth flying. Click an entity or player to follow it; Shift returns to the free camera.
-- Everything works while paused: look around, fly, click to follow. The world stays frozen.
-- Rewinding keeps the last picture on screen until the world at the new time is ready, like a video player
-  buffering. Several ±5 s presses in a row are combined into one jump.
-- Markers are flags on the timeline. When playback passes one, its name shows above the timeline for a moment;
-  Ctrl + ← / → jumps between them.
-- Chat is hidden in replays unless you turn it on, so private messages never show up on stream. Vanilla
-  tutorial and onboarding toasts are not shown either.
-
-**Camera paths** (editor: **J**)
-- Keyframes (**U**) store position, direction, FOV and roll. ✔ updates the selected keyframe with the current
-  camera, ✘ (or the Delete key) removes it.
-- Smooth non-uniform Hermite splines (Catmull-Rom style), even for unevenly spaced keyframes. FOV and pitch never
-  overshoot.
-- The path is drawn into the world while the editor is open and can be previewed in real time.
-
-**Video export**
-- Rendered frame by frame at a fixed frame rate, so the video is smooth even when your PC is not. The window
-  only shows a preview, which may stutter; that is expected.
-- Native **1080p, 1440p, 4K** and **1080 × 1920 (9:16)** for Shorts and TikTok, whatever the window size. The
-  preview shows a vertical video upright with black bars.
-- **Clean frames** (on by default): no name tags, block outline, hand or debug views. HUD and menus are never in
-  the video.
-- Works with Iris shader packs.
-- Without a camera path it films from your current view for 10 s, 30 s, 60 s or to the end.
-- Without ffmpeg it saves PNG images. ffmpeg is found automatically (PATH, WinGet, Scoop, Chocolatey,
-  `C:\ffmpeg`, Homebrew, MacPorts or `.minecraft/ffmpeg`), even when the launcher does not see your PATH.
-
-English and German, including every error message. Settings are also reachable through Mod Menu.
+To play without recording, open the pause menu and switch *Recording* (top left) off. It stays off until you
+switch it on again.
 
 ## Controls
 
@@ -68,95 +31,114 @@ All keys can be changed under *Options → Controls → ManiacReplay*.
 
 | Key | Action |
 | --- | --- |
-| M | Add marker (while recording) |
-| ↓ (arrow down) | Play / pause the replay |
-| ← / → | Back / forward 5 s |
-| Ctrl + ← / → | Previous / next marker (starts 10 s before it) |
-| J | Open the camera path editor |
+| M | Add a marker while recording |
+| ↓ | Play / pause |
+| ← / → | Back / forward 5 s (during a path preview: move the preview) |
+| Ctrl + ← / → | Previous / next marker |
+| J | Camera path editor |
 | U | Add a camera keyframe at the current view |
-| Left click | Follow the entity under the crosshair (Shift leaves) |
-| WASD + Space/Shift | Fly the free camera (scroll changes speed) |
-| Esc | Replay menu (back to replay, editor, settings, exit) |
+| Left click | Follow the player or mob under the crosshair; Shift returns to the free camera |
+| WASD, Space, Shift | Fly the free camera; the scroll wheel changes its speed |
+| Esc | Replay menu |
 | *(unbound)* | Recording on / off |
 
-In the editor, **right-drag** looks around and **WASD** flies. The defaults clash with nothing in vanilla 26.3
-(including F3 combinations), Iris, Sodium or Mod Menu; an automated test checks this.
+In the editor, hold the right mouse button to look around. The default keys do not overlap with vanilla 26.3
+(including F3 combinations) or with the defaults of Iris, Sodium and Mod Menu.
+
+## Features
+
+**Recording.** Every packet the server sends is copied with a timestamp into pooled buffers and compressed and
+written by a background thread; when nothing is recorded the cost is one volatile read per packet. The file is
+flushed about once a second, so after a crash the recording is recovered on the next start. If the disk falls far
+behind, the recording is stopped and saved instead of growing in memory. Automatic clean-up of old replays is
+available but off by default; replays with markers or a custom name are never deleted by it.
+
+**Watching.** Play, pause, 0.1× to 16× speed, a timeline to scrub, a free camera and click-to-follow, all of it
+also while paused. Jumping back rebuilds the world from the start of the recording (see *Limitations*); meanwhile
+the last picture stays on screen with a progress badge. When the recorded player changes dimension, the camera
+follows them. Recorded chat, including private messages, is hidden unless *Chat in Replays* is switched on.
+
+**Camera paths.** Keyframes store position, direction, FOV and roll. The curve between them is a shape-preserving
+cubic spline: smooth, and it never swings past a keyframe, however unevenly the keyframes are spaced. The path is
+drawn into the world while the editor is open and can be previewed in real time.
+
+**Video export.** Frames are rendered one by one at a fixed rate, so the video is smooth regardless of the frame
+rate on screen; the window only shows a preview. The game renders natively at the export size: 720p, 1080p,
+1440p, 4K or 1080 × 1920 for Shorts and TikTok, independent of the window. Name tags, the block outline and debug
+overlays are left out by default; the HUD is never in the video. H.264 through `libx264`, MPEG-4 otherwise.
 
 ## Files
 
-- `.minecraft/replays/`: `*.sreplay` files, plus a small `*.sreplay.paths` file for each camera path.
-- `.minecraft/replay_videos/`: exported videos, with an ffmpeg log next to each one.
-- `.minecraft/ffmpeg/`: ffmpeg, if you installed it with the button.
-- `.minecraft/config/streamerreplay.json`: settings.
+| Path | Content |
+| --- | --- |
+| `.minecraft/replays/` | `*.sreplay` recordings, `*.sreplay.paths` camera paths |
+| `.minecraft/replay_videos/` | Exported videos, each with its ffmpeg log |
+| `.minecraft/ffmpeg/` | ffmpeg, if installed from the mod |
+| `.minecraft/config/streamerreplay.json` | Settings |
+
+The mod id, package and config file still carry the project's first name, `streamerreplay`, so that settings,
+recordings and key bindings survive the rename.
 
 ## Privacy and network
 
-- **No telemetry, no analytics, no update checks.**
-- The mod goes online **only** when you click *Install ffmpeg*. It then downloads exactly one file,
-  [ffmpeg 9.0.2 essentials](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2) from Gyan's GitHub page (the
-  build `winget install ffmpeg` installs), checks its SHA-256 against the value in
-  [`FfmpegInstaller`](src/client/java/dev/robb/streamerreplay/render/FfmpegInstaller.java) and unpacks only
+- No telemetry, analytics or update checks.
+- The mod connects to the internet only when you click *Install ffmpeg*. It then downloads one file,
+  [ffmpeg 9.0.2 essentials](https://github.com/GyanD/codexffmpeg/releases/tag/9.0.2) from Gyan's GitHub releases,
+  verifies its SHA-256 against the value in
+  [`FfmpegInstaller`](src/client/java/dev/robb/streamerreplay/render/FfmpegInstaller.java), and unpacks only
   `ffmpeg.exe`.
-- The only program it starts is ffmpeg, and only to check it or to export a video.
-- Server addresses are not stored in replays unless you turn it on. Your player name and UUID are stored, so a
-  replay knows who recorded it.
-- Respect server rules: some servers do not allow recording.
+- The only program it runs is ffmpeg, to check it and to export.
+- Replays store your player name and UUID. The server address is only stored if you switch that on.
+- Some servers do not allow recording. Respect their rules.
 
-**Check the file yourself:** compare the SHA-256 of the jar with the one in the release notes
-(`Get-FileHash maniacreplay-1.2.0.jar -Algorithm SHA256` on Windows, `sha256sum` elsewhere), or upload it to
-[VirusTotal](https://www.virustotal.com). The source code is in this repository under the MIT license and contains
-no code from other replay mods.
+## Limitations
 
-## Known limitations
-
-- **Recording starts when you join.** A replay needs the world exactly as the server sent it at login
-  (registries, chunks, entities); rebuilding that from the client's partial copy would give replays that look
-  right but break when you seek. To record a session that is already running, leave and rejoin.
-- **Rewinding rebuilds the world** from the start and fast-forwards. Measured: 0.3–0.5 s for 15 s and 93 s
-  replays, almost all of it the fixed reconnect cost. Packet delivery takes about 1.3 ms per recorded second, so
-  a one-hour replay should take about 5 s (estimated, not measured). Periodic snapshots were considered and
-  rejected: the client world cannot be copied and restored safely.
-- Replays only play in the Minecraft version they were recorded with.
+- **Recording starts when you join.** A replay needs the world exactly as the server sent it at login; rebuilding
+  that from the client's partial copy would give replays that look right but break when you seek. To record a
+  session that is already running, leave and rejoin.
+- **Jumping back replays the recording from its start.** It costs about 1.6 ms per recorded second, measured on a
+  46 minute singleplayer recording on Windows 11: 3.9 s to jump back near its end, 1.2 s to a point five minutes in.
+  An hour-long recording takes about 6 s, three hours about 20 s. Jumping forward is fast. Snapshots that would
+  avoid the rebuild were considered and rejected: the client world cannot be copied and restored safely.
+- Replays play only in the Minecraft version they were recorded with.
 - Videos have no sound.
-- Server resource packs are not loaded in replays (the mod never downloads them).
-- The largest export size is limited by the GPU's maximum texture size (4K works on every current GPU).
-- Not compatible with the original *ReplayMod*: both tap the same network pipeline.
+- Server resource packs are not loaded in replays.
+- The largest export size is limited by the GPU's maximum texture size.
+- Not compatible with ReplayMod; both tap the same network pipeline.
 
 ## Compatibility
 
-- Mixins are small injections (`@Inject`, one `@ModifyArg`, one accessor); no `@Overwrite`, no `@Redirect`.
-  Every hook first checks one static field and returns at once when no replay is open.
-- The full end-to-end test passes on **Windows 11 with a real GPU** (version 1.2.0, English and German).
-- Earlier versions also passed it with **Sodium 0.9.3-beta.1, Lithium 0.26.2, Mod Menu 21.0.0**, and with
-  **Iris 1.11.7 + Sodium and the MakeUp UltraFast 9.5g shader pack** on OpenGL (Linux, software rendering).
-  Not tested yet: macOS, Vulkan with Iris.
-- Report problems with an exact mod list.
+The mixins are small injections (`@Inject`, one `@ModifyArg`, one accessor; no `@Overwrite` or `@Redirect`), and
+every hook returns at once when no replay is open. The full end-to-end test passes on Windows 11 with a real GPU,
+in English and German. Version 1.1 also passed it with Sodium 0.9.3-beta.1, Lithium 0.26.2, Mod Menu 21.0.0, and
+with Iris 1.11.7 and the MakeUp UltraFast shader pack (Linux, OpenGL). macOS has not been tested.
 
-## Building
+Please report problems with your exact mod list and `logs/latest.log`.
+
+## Building and testing
 
 ```
-./gradlew build                 # jar in build/libs, runs the unit tests (needs Java 25)
-./gradlew runClientGameTest     # full end-to-end test in a real game window
+./gradlew build               # mod jar in build/libs, runs the unit tests
+./gradlew runClientGameTest   # end-to-end test in a real game window
 ```
 
-## Testing
+The unit tests cover the file format and crash recovery, camera path interpolation, the clean-up rule, time
+formatting, ffmpeg discovery on Windows, macOS and Linux, and that German has every English text.
 
-- `./gradlew build`: unit tests for the file format, crash recovery, camera paths and splines, the clean-up rule,
-  time formatting, ffmpeg discovery on Windows/macOS/Linux (simulated file systems), and a check that German has
-  every English key.
-- `./gradlew runClientGameTest`: one end-to-end client test. It records a singleplayer world, uses the recording
-  switch, renames, opens, seeks and rewinds, follows entities, uses mouse look, flight and clicks while paused,
-  builds a camera path, exports MP4 at window size, native 1080p (ffprobe plus a sharpness measurement) and
-  1080×1920, compares clean frames on and off, records a dedicated server and checks that every label fits its
-  button.
-  - `-PgametestLang=de_de` runs it in German.
-  - `-PcompatMods=a.jar,b.jar` adds other mods (Sodium, Lithium, Mod Menu, Iris).
-  - `-PshaderPack=pack.zip` installs and enables a shader pack (with Iris). On Linux without a GPU this needs
-    `SDL_VIDEO_FORCE_EGL=1 LIBGL_ALWAYS_SOFTWARE=1`.
-  - `-PgametestProps=streamerreplay.gametest.mode=seekbench` records a 93 s replay and measures seeks.
-- `scripts/crash-recovery-test.sh` (Linux): records, kills the game with `SIGKILL`, starts it again and checks that
-  the replay was recovered with its marker and plays.
+The end-to-end test records a singleplayer world and a dedicated server (including a trip to the Nether), uses
+the recording switch, browses, renames, seeks, follows entities, looks around and clicks while paused, builds a
+camera path, exports at window size, native 1080p and 1080 × 1920 (checked with ffprobe and a sharpness
+measurement), compares clean frames, clicks through the editor with real mouse input and checks that every label
+fits its button. Options:
+
+- `-PgametestLang=de_de` runs it in German.
+- `-PcompatMods=a.jar,b.jar` loads other mods, `-PshaderPack=pack.zip` enables an Iris shader pack.
+- `-PgametestProps=streamerreplay.gametest.mode=seekfile,streamerreplay.gametest.replay=/path/to/x.sreplay`
+  measures seek times on any recording.
+- `scripts/crash-recovery-test.sh` (Linux) kills the game with `SIGKILL` while recording and checks the recovery.
+
+How the mod works is described in [ARCHITECTURE.md](ARCHITECTURE.md), changes in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT. All code is original.
+MIT. The code is original and contains no code from other replay mods.

@@ -22,12 +22,13 @@ ManiacReplay is a replay mod for **Minecraft 26.3 (Fabric)**, made for streamers
 - **Video export to MP4**:
   - Rendered frame by frame, so the video is perfectly smooth even when your PC is not.
   - **Real 1080p, 1440p or 4K**, whatever your window size, and **9:16 (1080 × 1920) for Shorts and TikTok**.
-  - Name tags, block outline, hand and debug overlays are left out by default. Works with Iris shader packs.
+  - Name tags, block outline and debug overlays are left out by default. Iris shader packs show up in the video
+    (tested with Iris 1.11 and MakeUp UltraFast).
   - No camera path needed: without one, it films from your current view.
 - **ffmpeg in one click** on Windows: the export screen offers to install it (one checked download). macOS and
   Linux: `brew install ffmpeg` or your package manager. Without ffmpeg, export saves PNG images.
-- **Cleans up after itself**: replays older than 30 days are deleted, except those with markers or a name you
-  gave them (change or turn off in the settings).
+- **Optional clean-up**: delete replays after 7 to 90 days, except those with markers or a name you gave them
+  (off by default).
 - **Crash-safe**: if the game crashes while recording, the replay is recovered on the next start.
 - English and German, settings also via Mod Menu.
 
@@ -35,7 +36,7 @@ ManiacReplay is a replay mod for **Minecraft 26.3 (Fabric)**, made for streamers
 
 - Recording copies network data into reusable buffers and compresses it on a background thread: no stutter.
 - With nothing recording or replaying, the mod's hooks cost practically nothing.
-- Small, targeted mixins only. Tested with Sodium, Lithium, Mod Menu and Iris (MakeUp UltraFast).
+- Small, targeted mixins only. Version 1.1 was tested together with Sodium, Lithium, Mod Menu and Iris.
 
 ## 🔒 Privacy
 

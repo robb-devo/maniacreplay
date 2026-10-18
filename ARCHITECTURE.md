@@ -50,13 +50,14 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 5. **Markers and thumbnail.** Pressing M stores a marker (time and name). After a few seconds a small
    screenshot is taken as the thumbnail. Both are stored as small "sidecar" files next to the `.rec`.
 6. **Save.** When you leave, a background thread packs the `.rec`, the metadata, the markers and the thumbnail into
-   one `.sreplay` file (a zip) and deletes the temporary files.
+   `name.sreplay.tmp`, renames it to `name.sreplay` and only then deletes the `.rec` and the sidecars. If anything
+   fails, the partial archive is removed and the `.rec` stays for recovery.
 7. **Crash safety.** The writer flushes about every second in a format that stays readable up to the last flush.
    If the game crashes, `RecoveryService` finds the left-over `.rec` on the next start and turns it into a
-   normal replay marked as "recovered".
+   normal replay marked as "recovered". It also removes partial archives left by a game killed while saving.
 8. **Clean-up.** After each save and once at start-up, `ReplayLibrary.cleanUp` deletes replays older than the
-   configured number of days (default 30 for new installs, off for updates from 1.1.x). `CleanupPolicy` keeps
-   every replay that has a marker or a name the player gave it, so nothing the player cared about disappears.
+   configured number of days. It is off unless the player switches it on (it deletes recordings). `CleanupPolicy`
+   keeps every replay that has a marker or a name the player gave it, so nothing the player cared about disappears.
 
 ## Playback
 
@@ -83,24 +84,34 @@ compatible (the game does its normal work, so render mods such as Sodium still a
      screen (over the loading screens) with a small "Rewinding" badge until the world at the new time is complete,
      so a rewind looks like a video player buffering. Your camera position and any open editor are restored
      afterwards. Presses of ±5 s within 300 ms are bundled into one rebuild (`ReplaySession.nudge`).
-   - Measured: ~0.3–0.5 s, almost all of it the fixed reconnect + level-load cost; packet delivery is ~1.3 ms per
-     recorded second. A bigger per-frame delivery budget during seeks was tried and was not faster, so it was dropped.
+   - While the session catches up after a jump, the clock stands still, so the replay arrives exactly at the
+     requested moment even when catching up takes seconds. Each rebuild is logged with its duration.
+   - Measured on a 46 minute singleplayer recording (Windows 11, real GPU): delivery costs about 1.6 ms per recorded
+     second; jumping back near the end takes 3.9 s, to five minutes in 1.2 s. Short replays rebuild in 0.2–0.3 s,
+     almost all of it the fixed reconnect cost. While the picture hides the world, each frame spends 80 ms instead
+     of 25 ms delivering; that gained about 6 % here and more when rendering is expensive.
    - Checkpoints (periodic snapshots to jump back to) were rejected: the client's world (chunks with light, entities
      with their data, block entities, scoreboards, boss bars, maps, the player list, registries) cannot be copied and
      restored safely, and a half-correct snapshot is worse than a slower correct rebuild.
 5. **Camera.** `ReplayCamera` flies smoothly with WASD and the mouse.
    - Clicking an entity follows it, using `EntityPicker`, a long-range ray from the camera.
    - Shift goes back to the free camera.
+   - When the world switches dimension during normal playback, the camera follows the recorded player, since the
+     old coordinates mean nothing in the new dimension. Switches replayed while catching up after a jump do not
+     move the camera.
    - Field of view and roll are applied through small camera hooks.
 
 ## Camera paths
 
 - A **keyframe** stores *where the camera is* (position, rotation, FOV, roll) at a given replay time.
 - `CameraPath` keeps the keyframes sorted. `HermiteSpline` draws a smooth curve through them:
-  - It is Catmull-Rom style and handles keyframes that are unevenly spaced in time.
+  - Tangents are time-weighted, so unevenly spaced keyframes give smooth motion.
+  - Every channel is shape-preserving (Fritsch-Carlson): the camera never swings past a keyframe. Without that, a
+    real path with keys 2 s and then minutes apart overshot by about 75 blocks.
   - Rotation always takes the short way round (`AngleMath`).
-  - FOV never overshoots.
-- `PathPlayer` moves the camera along the curve. It is used for the live preview and for export.
+- `PathPlayer` moves the camera along the curve. It is used for the live preview and for export. During a preview,
+  scrubbing the timeline or pressing ← / → moves the preview (`CameraPath.pathTimeAt` maps a replay time back to
+  the path).
 - Paths are saved (in the background) next to the replay as a small `.paths` file, so the large replay file is
   never rewritten. Replays from 1.1.x carry their path inside the archive; it is read from there if no `.paths`
   file exists. The editor's ✔ button overwrites the selected keyframe with the current camera.
@@ -174,6 +185,10 @@ compatible (the game does its normal work, so render mods such as Sodium still a
   - uses mouse look, flying and clicks while paused
   - exports at native 1080p (checked with ffprobe and a sharpness measure) and with clean frames on/off (frames compared)
   - exports a 9:16 video (1080×1920, checked with ffprobe)
+  - follows the recorded player into the Nether on a dedicated server
+  - clicks the editor's Exit button and drags the camera with real mouse input
+- `-PgametestProps=streamerreplay.gametest.mode=seekfile,streamerreplay.gametest.replay=/path/x.sreplay` measures
+  seek times on any recording.
 - Add `-PcompatMods=a.jar,b.jar` to run the same test with other mods loaded, for example Sodium, Iris and Lithium,
   and `-PshaderPack=pack.zip` to enable an Iris shader pack.
 - `scripts/crash-recovery-test.sh` kills the game with SIGKILL mid-recording, restarts it and checks the recovered replay.

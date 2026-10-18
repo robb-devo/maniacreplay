@@ -1,0 +1,32 @@
+name: Bug report
+description: Something does not work as expected.
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: ManiacReplay version
+      placeholder: "1.2.1"
+    validations:
+      required: true
+  - type: textarea
+    id: mods
+    attributes:
+      label: Other mods
+      description: The full list of your mods folder, including Fabric API.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Attach or paste `logs/latest.log` from your game folder.
+      render: text
+    validations:
+      required: false
