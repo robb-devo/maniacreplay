@@ -10,4 +10,4 @@ pluginManagement {
 }
 
 // Should match your modid
-rootProject.name = 'streamer-replay-mod'
+rootProject.name = 'maniacreplay'

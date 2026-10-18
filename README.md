@@ -1,4 +1,4 @@
-# Streamer Replay
+# ManiacReplay
 
 A replay mod for **Minecraft 26.3 (Fabric)** made with streamers in mind. Recording starts by itself. You can re-watch any
 moment from any angle, fly cinematic camera paths and export them to MP4, all without needing a tutorial.
@@ -40,7 +40,7 @@ moment from any angle, fly cinematic camera paths and export them to MP4, all wi
   - A progress screen shows ETA and a cancel button.
 - **Config screen** (also reachable through Mod Menu). English and German translations (German fully translated, including errors and Mod Menu texts; a unit test fails the build if any key is missing). Umlauts in world names, replay names and video file names work.
 
-## Controls (all rebindable under *Options → Controls → Streamer Replay*)
+## Controls (all rebindable under *Options → Controls → ManiacReplay*)
 
 | Key | Action |
 | --- | --- |
@@ -67,7 +67,7 @@ the export still works and saves PNG images (the help screen shows how to get MP
 ## Install
 
 1. Install Fabric Loader **0.19.5+** for Minecraft **26.3**, and **Fabric API 0.163.0+26.3**.
-2. Put `streamer-replay-mod-1.1.1.jar` into `.minecraft/mods`.
+2. Put `maniacreplay-1.1.2.jar` into `.minecraft/mods`.
 3. Optional:
    - [Mod Menu](https://modrinth.com/mod/modmenu) to open the config from the mod list.
    - **ffmpeg** for MP4 export (without it you get a PNG image sequence, and the export screen explains how to
@@ -123,16 +123,16 @@ You don't need to take anyone's word for it:
 - **The only program it starts is ffmpeg**, on your own PC, and only when you click *Export Video*. You
   install ffmpeg yourself and can choose its path in the settings.
 - **Scan the jar yourself.** Go to <https://www.virustotal.com>, choose *File*, and upload
-  `streamer-replay-mod-1.1.1.jar`. Dozens of virus scanners check it at once. You can also paste the checksum
+  `maniacreplay-1.1.2.jar`. Dozens of virus scanners check it at once. You can also paste the checksum
   below into VirusTotal's *Search* tab to see earlier scans of exactly this file.
 - **Make sure you have the original file.** Compare its SHA-256 checksum with the one published here and in
   the release notes:
-  - **Windows** (PowerShell): `Get-FileHash streamer-replay-mod-1.1.1.jar -Algorithm SHA256`
-  - **macOS / Linux**: `shasum -a 256 streamer-replay-mod-1.1.1.jar` or `sha256sum streamer-replay-mod-1.1.1.jar`
+  - **Windows** (PowerShell): `Get-FileHash maniacreplay-1.1.2.jar -Algorithm SHA256`
+  - **macOS / Linux**: `shasum -a 256 maniacreplay-1.1.2.jar` or `sha256sum maniacreplay-1.1.2.jar`
 
   ```
-  SHA-256 (streamer-replay-mod-1.1.1.jar)
-  6f8ec69679f2e1331b5001a073b3ed9269e1f0d53c5efcde7f714f779a455548
+  SHA-256 (maniacreplay-1.1.2.jar)
+  84553f3a1e55ddaaf39a98e7f369b7411b032a36c9dd35f0c775270cd4981d7c
   ```
 
   If the value differs, the file is not the official release. Delete it and download from the official

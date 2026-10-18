@@ -1,6 +1,6 @@
 # Listing metadata
 
-- Name: Streamer Replay
+- Name: ManiacReplay
 - Slug suggestion: streamer-replay
 - Summary: see summary.txt (Modrinth max 256 characters; this one is 124)
 - License: MIT

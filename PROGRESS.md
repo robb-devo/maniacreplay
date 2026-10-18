@@ -7,7 +7,7 @@ E2E test: `DISPLAY=:99 timeout 900 ./gradlew runClientGameTest --no-daemon`. Add
 Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/`, `screenshots/de_de/`, `screenshots/compat-*/`, `screenshots/crash-recovery/`.
 
 ## Status: 1.1.0 (perfection pass done)
-- Release jar: `dist/streamer-replay-mod-1.1.1.jar`, SHA-256 `6f8ec69679f2e1331b5001a073b3ed9269e1f0d53c5efcde7f714f779a455548` (rebuild is byte-identical).
+- Release jar: `dist/maniacreplay-1.1.2.jar`, SHA-256 `84553f3a1e55ddaaf39a98e7f369b7411b032a36c9dd35f0c775270cd4981d7c` (rebuild is byte-identical).
 - Unit tests: 31 (format, recovery, splines, time format, translations, ffmpeg discovery for Windows/macOS/Linux).
 - E2E client gametest passes in four configurations (runs of 2026-10-17, 23:13–23:20 CEST):
   vanilla EN, vanilla DE (`-PgametestLang=de_de`, label fit ok on every screen), Sodium 0.9.3-beta.1 + Lithium 0.26.2 +
@@ -92,8 +92,8 @@ Screenshots: `build/run/clientGameTest/screenshots`, copied to `screenshots/`, `
    - OpenGL: Xvfb GLX has no sRGB-capable visual, which the game requests; EGL works (`SDL_VIDEO_FORCE_EGL=1`).
 
 ## Publishing
-- GitHub: https://github.com/robb-devo/streamer-replay-mod (private), pushed after every step.
-- Modrinth/CurseForge: the user uploads `publish/streamer-replay-mod-1.1.1.jar` with the texts in `publish/`.
+- GitHub: https://github.com/robb-devo/maniacreplay (private), pushed after every step.
+- Modrinth/CurseForge: the user uploads `publish/maniacreplay-1.1.2.jar` with the texts in `publish/`.
 
 ## 1.1.1
 

@@ -38,6 +38,6 @@ public final class StreamerReplayClient implements ClientModInitializer {
 
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> RecoveryService.recoverAsync());
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> RecordingManager.shutdown());
-		StreamerReplay.LOGGER.info("Streamer Replay {} ready", StreamerReplay.version());
+		StreamerReplay.LOGGER.info("ManiacReplay {} ready", StreamerReplay.version());
 	}
 }

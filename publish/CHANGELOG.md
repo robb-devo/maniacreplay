@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2 (Minecraft 26.3, Fabric)
+
+- **New name: ManiacReplay** (formerly Streamer Replay), with a new icon. Mod id, settings, recordings and key bindings are unchanged, so updating keeps everything. Jar: `maniacreplay-1.1.2.jar`.
+
 ## 1.1.1 (Minecraft 26.3, Fabric)
 
 - **New default keys that clash with nothing**: play/pause **↓**, camera editor **J**, keyframe **U** (marker stays **M**,

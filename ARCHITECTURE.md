@@ -1,4 +1,4 @@
-# How Streamer Replay works (plain-language overview)
+# How ManiacReplay works (plain-language overview)
 
 This document explains how the mod works without assuming you know Minecraft modding. Class names appear in
 `code font` so developers can find the code. Everything lives under `dev.robb.streamerreplay`.
@@ -8,7 +8,7 @@ This document explains how the mod works without assuming you know Minecraft mod
 When you play, the server constantly sends your game messages ("packets"): *this chunk looks like this*,
 *that pig moved here*, *it started raining*. Your game turns these messages into the world you see.
 
-Streamer Replay **keeps a copy of every message the server sends**, together with the moment it arrived.
+ManiacReplay **keeps a copy of every message the server sends**, together with the moment it arrived.
 Watching a replay means **feeding those same messages back into the game** at the same pace, from a fake
 "server" that is really just the file. The game believes it is connected to a server and draws the world as
 usual. You are only an invisible spectator with a free-flying camera.

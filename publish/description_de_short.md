@@ -1,4 +1,4 @@
-# Streamer Replay (Kurzfassung)
+# ManiacReplay (Kurzfassung)
 
 **Automatisch aufnehmen, aus jedem Winkel ansehen, Kamerafahrten bauen, als MP4 exportieren. Ohne Einrichtung.**
 

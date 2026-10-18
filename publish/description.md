@@ -1,8 +1,8 @@
-# Streamer Replay
+# ManiacReplay
 
 **Record everything automatically. Re-watch it from any angle. Fly cinematic camera paths. Export to MP4. No setup.**
 
-Streamer Replay is a replay mod for **Minecraft 26.3 (Fabric)**, built for streamers and content creators who want
+ManiacReplay is a replay mod for **Minecraft 26.3 (Fabric)**, built for streamers and content creators who want
 the clip *after* it happened, without having to plan for it.
 
 ## ✨ Highlights
@@ -81,11 +81,11 @@ The only external program it starts is ffmpeg, and only when you export a video.
 
 ## License
 
-MIT, open source: https://github.com/robb-devo/streamer-replay-mod
+MIT, open source: https://github.com/robb-devo/maniacreplay
 
 ## 🛡 Is this safe?
 
 - **Open source.** The full code is on GitHub.
 - **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
 - **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `6f8ec69679f2e1331b5001a073b3ed9269e1f0d53c5efcde7f714f779a455548`
+  `84553f3a1e55ddaaf39a98e7f369b7411b032a36c9dd35f0c775270cd4981d7c`
