@@ -24,7 +24,8 @@ import java.util.UUID;
  * Rewrites the recorded packet stream so the local client becomes a free spectator camera instead of the
  * recorded player: the recorded player keeps its entity id and is rendered like any other player, while the
  * camera gets its own id and UUID. Packets that would control the camera, open screens or end the session are
- * dropped. While fast-forwarding, effect-only packets (sounds, particles) are skipped as well.
+ * dropped. While fast-forwarding, effect-only packets (sounds, particles) are skipped as well. Chat is dropped
+ * unless the player turned it on: a replay shown on stream should not show private messages.
  *
  * <p>Runs on the render thread (the replay channel is driven from there).
  */
@@ -79,8 +80,19 @@ public final class ReplayPacketFilter {
 		ClientboundHurtAnimationPacket.class
 	);
 
+	private static final Set<Class<?>> CHAT = Set.of(
+		ClientboundPlayerChatPacket.class,
+		ClientboundDisguisedChatPacket.class,
+		ClientboundDeleteChatPacket.class
+	);
+
+	private final boolean showChat;
 	private boolean acceptNextPosition = true;
 	private boolean skipEffects;
+
+	public ReplayPacketFilter(boolean showChat) {
+		this.showChat = showChat;
+	}
 
 	/** While fast-forwarding, skip sounds and particles to avoid a burst of noise and wasted work. */
 	public void setSkipEffects(boolean skip) {
@@ -96,6 +108,9 @@ public final class ReplayPacketFilter {
 		}
 		if (skipEffects && EFFECTS.contains(type)) {
 			return null;
+		}
+		if (!showChat && (CHAT.contains(type) || packet instanceof ClientboundSystemChatPacket system && !system.overlay())) {
+			return null; // the action bar (overlay) is part of the game, not chat
 		}
 		return switch (packet) {
 			case ClientboundBundlePacket bundle -> filterBundle(bundle);

@@ -35,6 +35,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 	private TimelineWidget timeline;
 	private Button playButton;
 	private Button removeButton;
+	private Button updateButton;
 	private Button prevButton;
 	private Button nextButton;
 	private Button previewButton;
@@ -60,11 +61,11 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		// row 2: transport (left), camera (right)
 		int y = top + 26;
 		int x = 8;
-		addRenderableWidget(small("\u00AB", x, y, "streamerreplay.editor.back", ReplayKeys.SEEK_BACK, b -> seekBy(-ReplayKeys.SEEK_STEP_MS)));
+		addRenderableWidget(small("\u00AB", x, y, "streamerreplay.editor.back", ReplayKeys.SEEK_BACK, b -> ReplayKeys.seekStep(session, -1)));
 		x += 22;
 		playButton = addRenderableWidget(small("\u25B6", x, y, "streamerreplay.editor.play", ReplayKeys.PLAY_PAUSE, b -> ReplayKeys.togglePlayback(session)));
 		x += 22;
-		addRenderableWidget(small("\u00BB", x, y, "streamerreplay.editor.forward", ReplayKeys.SEEK_FORWARD, b -> seekBy(ReplayKeys.SEEK_STEP_MS)));
+		addRenderableWidget(small("\u00BB", x, y, "streamerreplay.editor.forward", ReplayKeys.SEEK_FORWARD, b -> ReplayKeys.seekStep(session, 1)));
 		x += 26;
 		ValueSlider speed = new ValueSlider(x, y, 84, 20, 0, SPEEDS.length - 1, 1, speedIndex(session.clock().speed()),
 			v -> Component.translatable("streamerreplay.editor.speed", ReplayHud.formatSpeed(SPEEDS[(int) v])),
@@ -93,8 +94,10 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		Button add = button("streamerreplay.editor.add_keyframe", x, y, ReplayKeys.KEYFRAME, b -> selectKeyframe(ReplayKeys.addKeyframe(session)));
 		addRenderableWidget(add);
 		x += add.getWidth() + 4;
-		removeButton = addRenderableWidget(button("streamerreplay.editor.remove_keyframe", x, y, null, b -> removeSelected()));
-		x += removeButton.getWidth() + 4;
+		updateButton = addRenderableWidget(small("\u2714", x, y, "streamerreplay.editor.update_keyframe", null, b -> updateSelected()));
+		x += 24;
+		removeButton = addRenderableWidget(small("\u2718", x, y, "streamerreplay.editor.remove_keyframe", null, b -> removeSelected()));
+		x += 24;
 		prevButton = addRenderableWidget(small("\u25C0", x, y, "streamerreplay.editor.prev_keyframe", null, b -> step(-1)));
 		x += 22;
 		nextButton = addRenderableWidget(small("\u25B6", x, y, "streamerreplay.editor.next_keyframe", null, b -> step(1)));
@@ -139,10 +142,6 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	// ------------------------------------------------------------------------------------------------ actions
 
-	private void seekBy(double deltaMs) {
-		session.seek(Math.max(0, Math.min(session.clock().durationMs(), session.clock().timeMs() + deltaMs)));
-	}
-
 	private void selectKeyframe(int index) {
 		selected = index;
 		timeline.setSelectedKeyframe(index);
@@ -157,6 +156,14 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		}
 		int index = selected < 0 ? path.nearestByReplayTime((long) session.clock().timeMs()) : selected + direction;
 		selectKeyframe(Math.max(0, Math.min(path.size() - 1, index)));
+	}
+
+	/** Overwrites the selected keyframe with the current camera (position, direction, FOV, roll). */
+	private void updateSelected() {
+		if (selected >= 0) {
+			session.updateKeyframe(selected);
+			Notifications.replay(Component.translatable("streamerreplay.toast.keyframe_updated", selected + 1), null);
+		}
 	}
 
 	private void removeSelected() {
@@ -192,6 +199,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 			selected = path.size() - 1;
 		}
 		removeButton.active = selected >= 0;
+		updateButton.active = selected >= 0;
 		prevButton.active = !path.isEmpty() && selected != 0;
 		nextButton.active = !path.isEmpty() && selected < path.size() - 1;
 		previewButton.active = path.isPlayable();
@@ -233,11 +241,11 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 			return true;
 		}
 		if (ReplayKeys.SEEK_BACK.matches(event)) {
-			seekBy(-ReplayKeys.SEEK_STEP_MS);
+			ReplayKeys.seekStep(session, -1);
 			return true;
 		}
 		if (ReplayKeys.SEEK_FORWARD.matches(event)) {
-			seekBy(ReplayKeys.SEEK_STEP_MS);
+			ReplayKeys.seekStep(session, 1);
 			return true;
 		}
 		if (event.key() == InputConstants.KEY_DELETE && selected >= 0) {
@@ -281,15 +289,16 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 	@Override
 	public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
 		// The world stays fully visible behind the editor; only the camera path is drawn over it.
-		PathPreviewRenderer.draw(g, font, session, width, height);
+		PathPreviewRenderer.draw(g, font, session, width, height, selected);
 	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
 		int top = height - PANEL_HEIGHT;
 		Theme.panel(g, 0, top, width, height);
-		String time = TimeFormat.clock((long) session.clock().timeMs()) + " / " + TimeFormat.clock(session.clock().durationMs());
-		g.text(font, time, 8, top + 9, Theme.TEXT, false);
+		String now = TimeFormat.clock((long) session.clock().timeMs());
+		g.text(font, now, 8, top + 9, Theme.TEXT, false);
+		g.text(font, " / " + TimeFormat.clock(session.clock().durationMs()), 8 + font.width(now), top + 9, Theme.TEXT_DIM, false);
 
 		CameraPath path = session.path();
 		Component info = path.isEmpty()
@@ -299,7 +308,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 		Component hint = Component.translatable("streamerreplay.editor.camera_hint");
 		boolean sameLine = 8 + font.width(info) + 12 + font.width(hint) <= width - 8;
 		g.text(font, hint, width - 8 - font.width(hint), sameLine ? top - 11 : top - 22, Theme.TEXT_DIM, true);
-		if (session.isFastForwarding()) {
+		if (session.isFastForwarding() && !RewindOverlay.isShown()) {
 			Component seeking = Component.translatable("streamerreplay.hud.seeking", Math.round(session.catchUpProgress() * 100));
 			g.centeredText(font, seeking, width / 2, top / 2, Theme.TEXT);
 		}

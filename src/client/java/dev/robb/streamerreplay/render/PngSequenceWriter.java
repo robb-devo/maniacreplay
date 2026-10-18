@@ -15,16 +15,22 @@ import java.util.concurrent.TimeUnit;
 /**
  * Export without ffmpeg: every frame becomes a numbered PNG ({@code frame_000001.png}) in a folder next to where the
  * video would have gone. Any video editor (or ffmpeg later) can turn the sequence into a video.
+ *
+ * <p>PNG compression is slow, and every frame is its own file, so several writer threads encode in parallel.
  */
 public final class PngSequenceWriter implements FrameSink {
-	private static final byte[] END = new byte[0];
+	private static final int THREADS = Math.clamp(Runtime.getRuntime().availableProcessors() / 2, 1, 4);
+	private static final Frame END = new Frame(-1, new byte[0]);
+
+	private record Frame(int index, byte[] data) {
+	}
 
 	private final int width;
 	private final int height;
 	private final Path folder;
-	private final BlockingQueue<byte[]> queue = new ArrayBlockingQueue<>(3);
-	private final BlockingQueue<byte[]> pool = new ArrayBlockingQueue<>(6);
-	private final Thread writer;
+	private final BlockingQueue<Frame> queue = new ArrayBlockingQueue<>(THREADS + 2);
+	private final BlockingQueue<byte[]> pool = new ArrayBlockingQueue<>(2 * THREADS + 4);
+	private final Thread[] writers = new Thread[THREADS];
 	private volatile IOException failure;
 	private int index;
 
@@ -32,7 +38,9 @@ public final class PngSequenceWriter implements FrameSink {
 		this.folder = folder;
 		this.width = width;
 		this.height = height;
-		this.writer = Thread.ofPlatform().name("StreamerReplay-png-writer").daemon().start(this::writeLoop);
+		for (int i = 0; i < THREADS; i++) {
+			writers[i] = Thread.ofPlatform().name("ManiacReplay-png-writer-" + i).daemon().start(this::writeLoop);
+		}
 	}
 
 	/** The folder used for a given video file name: "Name.mp4" becomes "Name (PNG frames)". */
@@ -63,8 +71,9 @@ public final class PngSequenceWriter implements FrameSink {
 	}
 
 	@Override
-	public void submit(byte[] frame) throws IOException {
+	public void submit(byte[] data) throws IOException {
 		check();
+		Frame frame = new Frame(++index, data);
 		try {
 			while (!queue.offer(frame, 100, TimeUnit.MILLISECONDS)) {
 				check();
@@ -84,12 +93,12 @@ public final class PngSequenceWriter implements FrameSink {
 	private void writeLoop() {
 		try {
 			while (true) {
-				byte[] frame = queue.take();
+				Frame frame = queue.take();
 				if (frame == END) {
 					break;
 				}
 				write(frame);
-				pool.offer(frame);
+				pool.offer(frame.data());
 			}
 		} catch (IOException e) {
 			failure = e;
@@ -99,16 +108,15 @@ public final class PngSequenceWriter implements FrameSink {
 		}
 	}
 
-	private void write(byte[] frame) throws IOException {
+	private void write(Frame frame) throws IOException {
 		try (NativeImage image = new NativeImage(NativeImage.Format.RGBA, width, height, false)) {
 			long pointer = image.getPointer();
 			int row = width * 4;
 			java.nio.ByteBuffer target = MemoryUtil.memByteBuffer(pointer, row * height);
 			for (int y = 0; y < height; y++) { // GPU rows are bottom-up
-				target.put(y * row, frame, (height - 1 - y) * row, row);
+				target.put(y * row, frame.data(), (height - 1 - y) * row, row);
 			}
-			index++;
-			image.writeToFile(folder.resolve(String.format(java.util.Locale.ROOT, "frame_%06d.png", index)));
+			image.writeToFile(folder.resolve(String.format(java.util.Locale.ROOT, "frame_%06d.png", frame.index())));
 		}
 	}
 
@@ -120,8 +128,13 @@ public final class PngSequenceWriter implements FrameSink {
 	@Override
 	public int finish(long timeoutSeconds) throws IOException {
 		try {
-			queue.put(END);
-			writer.join(TimeUnit.SECONDS.toMillis(timeoutSeconds));
+			long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(timeoutSeconds);
+			for (int i = 0; i < THREADS; i++) {
+				queue.put(END);
+			}
+			for (Thread writer : writers) {
+				writer.join(Math.max(1, TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())));
+			}
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new LocalizedIOException("streamerreplay.error.interrupted");
@@ -132,7 +145,9 @@ public final class PngSequenceWriter implements FrameSink {
 
 	@Override
 	public void close() {
-		writer.interrupt();
+		for (Thread writer : writers) {
+			writer.interrupt();
+		}
 	}
 
 	public Path folder() {

@@ -2,6 +2,11 @@ package dev.robb.streamerreplay.input;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.StreamerReplay;
+import dev.robb.streamerreplay.config.ReplayConfig;
+import dev.robb.streamerreplay.format.Marker;
+import dev.robb.streamerreplay.ui.browser.ReplayBrowserList;
+import dev.robb.streamerreplay.ui.hud.ReplayHud;
+import java.util.List;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.replay.EntityPicker;
 import dev.robb.streamerreplay.replay.ReplaySession;
@@ -19,7 +24,7 @@ public final class ReplayKeys {
 	// Defaults avoid every vanilla 26.3 binding (including F3 debug combos and creative toolbar keys) and the
 	// defaults of Iris (R, K, I), Sodium and Mod Menu. J/U sit together on QWERTY and QWERTZ alike.
 	public static final KeyMapping MARKER = key("marker", InputConstants.KEY_M);
-	public static final KeyMapping STOP_RECORDING = key("stop_recording", InputConstants.UNKNOWN.getValue());
+	public static final KeyMapping TOGGLE_RECORDING = key("toggle_recording", InputConstants.UNKNOWN.getValue());
 	public static final KeyMapping PLAY_PAUSE = key("play_pause", InputConstants.KEY_DOWN);
 	public static final KeyMapping EDITOR = key("editor", InputConstants.KEY_J);
 	public static final KeyMapping KEYFRAME = key("keyframe", InputConstants.KEY_U);
@@ -44,23 +49,18 @@ public final class ReplayKeys {
 		while (MARKER.consumeClick()) {
 			RecordingManager.addMarker();
 		}
-		while (STOP_RECORDING.consumeClick()) {
-			stopRecordingPressed(mc);
-		}
-	}
-
-	/** The "Stop Recording" key: stops, or explains how to start a recording when none is running. */
-	public static void stopRecordingPressed(Minecraft mc) {
-		if (RecordingManager.isRecording()) {
-			RecordingManager.stopActive();
-		} else {
-			Notifications.recording(Component.translatable("streamerreplay.toast.not_recording"), RecordingManager.notRecordingHint(mc));
+		while (TOGGLE_RECORDING.consumeClick()) {
+			boolean on = !ReplayConfig.get().recordingEnabled;
+			RecordingManager.setRecordingEnabled(on);
+			if (!on) {
+				Notifications.recording(Component.translatable("streamerreplay.toast.recording_off"), null);
+			}
 		}
 	}
 
 	/**
-	 * Every frame while a replay world is shown. Driven per frame rather than per tick because a paused replay
-	 * runs no game ticks, and K must still be able to resume it. Key presses only arrive while no screen is open.
+	 * Every frame while a replay world is shown. Driven per frame rather than per tick so that keys respond at once
+	 * even in slow motion, when game ticks are rare. Key presses only arrive while no screen is open.
 	 */
 	public static void handleReplayKeys(Minecraft mc, ReplaySession session) {
 		EntityPicker.handleClicks(mc, session);
@@ -76,11 +76,49 @@ public final class ReplayKeys {
 			addKeyframe(session);
 		}
 		while (SEEK_BACK.consumeClick()) {
-			session.seek(Math.max(0, session.clock().timeMs() - SEEK_STEP_MS));
+			seekStep(session, -1);
 		}
 		while (SEEK_FORWARD.consumeClick()) {
-			session.seek(Math.min(session.clock().durationMs(), session.clock().timeMs() + SEEK_STEP_MS));
+			seekStep(session, 1);
 		}
+	}
+
+	/** ← / →: 5 seconds. With Ctrl held: to the previous / next marker (a little before it, like the browser). */
+	public static void seekStep(ReplaySession session, int direction) {
+		if (InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL)) {
+			jumpToMarker(session, direction);
+		} else {
+			session.nudge(direction * SEEK_STEP_MS);
+		}
+	}
+
+	private static void jumpToMarker(ReplaySession session, int direction) {
+		double now = session.clock().timeMs();
+		List<Marker> markers = session.markers();
+		Marker target = null;
+		if (direction > 0) {
+			for (Marker marker : markers) {
+				if (markerStart(marker) > now + 500) {
+					target = marker;
+					break;
+				}
+			}
+		} else {
+			for (int i = markers.size() - 1; i >= 0; i--) {
+				if (markerStart(markers.get(i)) < now - 1500) { // a little slack, so pressing again goes further back
+					target = markers.get(i);
+					break;
+				}
+			}
+		}
+		if (target != null) {
+			session.seek(markerStart(target));
+			ReplayHud.showMarker(target);
+		}
+	}
+
+	private static long markerStart(Marker marker) {
+		return Math.max(0, marker.timeMs() - ReplayBrowserList.MARKER_PREROLL_MS);
 	}
 
 	/** Play/pause; while a camera path preview runs it stops the preview instead. */

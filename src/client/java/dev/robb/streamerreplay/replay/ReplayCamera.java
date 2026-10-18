@@ -100,10 +100,6 @@ public final class ReplayCamera {
 		vx = vy = vz = 0;
 	}
 
-	public boolean isFollowingPath() {
-		return pathPose != null;
-	}
-
 	public boolean isInitialized() {
 		return initialized;
 	}

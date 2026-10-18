@@ -11,6 +11,7 @@ import dev.robb.streamerreplay.format.ReplayMeta;
 import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.ui.Notifications;
+import dev.robb.streamerreplay.ui.hud.RecordingIndicatorHud;
 import dev.robb.streamerreplay.util.TimeFormat;
 import io.netty.channel.Channel;
 import net.minecraft.SharedConstants;
@@ -38,7 +39,7 @@ public final class RecordingManager {
 	private static final long THUMBNAIL_DELAY_MS = 4000;
 	/** Single thread so saves happen in order and never compete for disk bandwidth. */
 	private static final ExecutorService SAVER = Executors.newSingleThreadExecutor(r -> {
-		Thread thread = new Thread(r, "StreamerReplay-Saver");
+		Thread thread = new Thread(r, "ManiacReplay-Saver");
 		thread.setDaemon(true);
 		return thread;
 	});
@@ -65,7 +66,7 @@ public final class RecordingManager {
 		Minecraft mc = Minecraft.getInstance();
 		boolean singleplayer = connection.isMemoryConnection();
 		ReplayConfig config = ReplayConfig.get();
-		if (singleplayer ? !config.recordSingleplayer : !config.recordMultiplayer) {
+		if (!config.recordingEnabled || (singleplayer ? !config.recordSingleplayer : !config.recordMultiplayer)) {
 			return;
 		}
 		if (!(channel.pipeline().get(RecordingTap.NAME) instanceof RecordingTap tap)) {
@@ -140,6 +141,12 @@ public final class RecordingManager {
 			stop(recorder);
 			return;
 		}
+		if (recorder.overflowed()) {
+			StreamerReplay.LOGGER.warn("Recording stopped: the disk could not keep up");
+			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), Component.translatable("streamerreplay.toast.disk_too_slow"));
+			stop(recorder);
+			return;
+		}
 		recorder.tick(mc.isPaused());
 		if (recorder.elapsedMs() > THUMBNAIL_DELAY_MS && mc.level != null && mc.gui.screen() == null && recorder.isPlayPhase()
 			&& recorder.claimThumbnailRequest()) {
@@ -172,6 +179,7 @@ public final class RecordingManager {
 				if (saved != null) {
 					StreamerReplay.LOGGER.info("Replay saved: {}", saved);
 					Notifications.recording(Component.translatable("streamerreplay.toast.replay_saved"), Component.literal(ReplayLibrary.displayName(saved)));
+					ReplayLibrary.cleanUp();
 				} else {
 					StreamerReplay.LOGGER.info("Discarded empty recording {}", recorder.recordingFile().getFileName());
 				}
@@ -182,7 +190,24 @@ public final class RecordingManager {
 		});
 	}
 
-	/** Adds a marker at the current recording time. */
+	/**
+	 * The recording switch (settings and pause menu). Turning it off stops and saves a running recording. Turning
+	 * it on cannot start one in the middle of a session (see {@link #notRecordingHint}), so it says when it will.
+	 */
+	public static void setRecordingEnabled(boolean enabled) {
+		ReplayConfig config = ReplayConfig.get();
+		config.recordingEnabled = enabled;
+		config.save();
+		if (!enabled) {
+			stopActive();
+			return;
+		}
+		Minecraft mc = Minecraft.getInstance();
+		if (mc.level != null && !isRecording() && !ReplayManager.isActive()) {
+			Notifications.recording(Component.translatable("streamerreplay.toast.recording_on"), notRecordingHint(mc));
+		}
+	}
+
 	/**
 	 * Why nothing is being recorded, for the "not recording" toast. Joining in the middle is not supported on
 	 * purpose: a replay needs the world exactly as the server sent it at login (registries, chunks, entities), and
@@ -194,12 +219,16 @@ public final class RecordingManager {
 			return null;
 		}
 		ReplayConfig config = ReplayConfig.get();
+		if (!config.recordingEnabled) {
+			return Component.translatable("streamerreplay.toast.not_recording.off");
+		}
 		if (mc.isLocalServer() ? !config.recordSingleplayer : !config.recordMultiplayer) {
 			return Component.translatable(mc.isLocalServer() ? "streamerreplay.toast.not_recording.off_singleplayer" : "streamerreplay.toast.not_recording.off_servers");
 		}
 		return Component.translatable("streamerreplay.toast.not_recording.rejoin");
 	}
 
+	/** Adds a marker at the current recording time. */
 	public static void addMarker() {
 		Recorder recorder = active;
 		if (recorder == null || recorder.isStopped()) {
@@ -207,7 +236,10 @@ public final class RecordingManager {
 			return;
 		}
 		Marker marker = recorder.addMarker(Component.translatable("streamerreplay.marker.default", recorder.markerCount() + 1).getString());
-		Notifications.recording(Component.translatable("streamerreplay.toast.marker_added"), Component.literal(TimeFormat.clock(marker.timeMs())));
+		RecordingIndicatorHud.flashMarker();
+		if (!RecordingIndicatorHud.isVisible()) { // the badge confirms it in place; without the badge, a toast does
+			Notifications.recording(Component.translatable("streamerreplay.toast.marker_added"), Component.literal(TimeFormat.clock(marker.timeMs())));
+		}
 	}
 
 	/** Game is closing: finish the active recording and wait (bounded) for it to be saved. */
@@ -229,7 +261,7 @@ public final class RecordingManager {
 		return recorder == null ? null : recorder.recordingFile();
 	}
 
-	/** True while the saver thread still has work queued (used to delay recovery scans). */
+	/** The single background thread for saving, recovery, clean-up and small sidecar writes, in submission order. */
 	public static ExecutorService saver() {
 		return SAVER;
 	}

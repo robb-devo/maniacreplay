@@ -1,91 +1,77 @@
 # ManiacReplay
 
-**Record everything automatically. Re-watch it from any angle. Fly cinematic camera paths. Export to MP4. No setup.**
+**Records everything on its own. Watch it again from any angle. Fly camera paths. Export MP4. No setup.**
 
-ManiacReplay is a replay mod for **Minecraft 26.3 (Fabric)**, built for streamers and content creators who want
-the clip *after* it happened, without having to plan for it.
+ManiacReplay is a replay mod for **Minecraft 26.3 (Fabric)**, made for streamers and creators who want the clip
+*after* it happened, without planning for it.
 
-## ✨ Highlights
+## ✨ What it does
 
-- **Automatic recording.** Recording starts when you join a world or server and saves when you leave. It works in singleplayer and multiplayer.
-- **REC badge and markers.** A small `● REC` indicator shows while recording (it can be hidden for a clean stream).
-  Press **M** to mark a great moment. Markers show up on the replay timeline.
-- **Replay browser** on the title screen:
-  - Thumbnails, world name, date, duration and marker count.
-  - Rename and delete with one click.
-- **Watch like a video.**
-  - Play/pause (**↓**), ±5 s (**← / →**), speed from 0.1× to 16×.
-  - A timeline you can scrub.
-- **Free camera.** Fly anywhere. **Click any player or mob to follow them** (Shift returns to the free camera).
-  All of this also works **while paused**: the world freezes, you keep looking around, flying and picking targets.
-- **Camera path editor** (**O**):
-  - Add keyframes (**I**). Each one stores position, rotation, FOV and **camera roll**.
-  - Paths are smooth, drawn over the world while editing and previewed in real time.
-- **Video export to MP4** (H.264 via ffmpeg):
+- **Records automatically** in singleplayer and on servers, from the moment you join until you leave.
+  - Press **M** at a great moment to set a marker.
+  - Just want to play? Switch recording off in the **pause menu** (top left). It stays off until you switch it back on.
+  - A small `● REC` badge shows while recording (can be hidden for a clean stream).
+- **Replay browser** on the title screen (film-strip button): thumbnails, world name, date and length.
+  Click a **⚑ marker** to start 10 seconds before it.
+- **Watch like a video**: play/pause (**↓**), ±5 s (**← / →**), 0.1× to 16× speed, a timeline you can drag.
+  Rewinding keeps the last picture on screen while the world is rebuilt, like a video player buffering.
+- **Free camera**: fly anywhere. **Click any player or mob to follow them** (Shift returns to the free camera).
+  Works while paused too.
+- **Camera paths** (**J** opens the editor, **U** adds a keyframe): position, direction, FOV and camera roll,
+  smooth curves, drawn into the world and previewed live.
+- **Video export to MP4**:
   - Rendered frame by frame, so the video is perfectly smooth even when your PC is not.
-  - **Real 1080p, 1440p or 4K**, rendered at that size whatever your window size.
-  - **Clean frames** by default: no name tags, block outline, hand or debug overlays in the video.
-  - Works with **Iris shader packs**.
-  - A progress screen shows the ETA and has a cancel button.
-- **Crash-safe.** If the game crashes mid-recording, the replay is recovered on the next start.
-- **Settings screen** (also via Mod Menu), in **English and German**. Every text, including errors, is translated natively, and umlauts in replay and video names work.
+  - **Real 1080p, 1440p or 4K**, whatever your window size, and **9:16 (1080 × 1920) for Shorts and TikTok**.
+  - Name tags, block outline, hand and debug overlays are left out by default. Works with Iris shader packs.
+  - No camera path needed: without one, it films from your current view.
+- **ffmpeg in one click** on Windows: the export screen offers to install it (one checked download). macOS and
+  Linux: `brew install ffmpeg` or your package manager. Without ffmpeg, export saves PNG images.
+- **Cleans up after itself**: replays older than 30 days are deleted, except those with markers or a name you
+  gave them (change or turn off in the settings).
+- **Crash-safe**: if the game crashes while recording, the replay is recovered on the next start.
+- English and German, settings also via Mod Menu.
 
-## ⚡ Built to stay out of your way
+## ⚡ Stays out of your way
 
-- **Light on resources.**
-  - Recording copies network data into reusable buffers and compresses and writes it on a background thread.
-    There is no stutter and no per-packet garbage.
-  - With nothing recording or replaying, the mod's hooks cost practically nothing.
-- **Compatibility-friendly.** It uses only small, targeted mixin injections. Integrations are optional and guarded.
-  The full end-to-end test (record, watch, follow, camera path, export, multiplayer) passes with **Sodium, Lithium and Mod Menu** installed,
-  and with **Iris + Sodium and the MakeUp UltraFast shader pack** on OpenGL (software rendering on the test machine).
-- **Private by default.** The server address is *not* stored in replays unless you enable it.
+- Recording copies network data into reusable buffers and compresses it on a background thread: no stutter.
+- With nothing recording or replaying, the mod's hooks cost practically nothing.
+- Small, targeted mixins only. Tested with Sodium, Lithium, Mod Menu and Iris (MakeUp UltraFast).
 
-## 🎬 Video export needs ffmpeg
+## 🔒 Privacy
 
-The mod does not include ffmpeg. Install it (e.g. `winget install ffmpeg`, `brew install ffmpeg`, or your Linux package manager)
-or unzip it into `.minecraft/ffmpeg`. It is found automatically (PATH, WinGet, Scoop, Chocolatey, Homebrew, MacPorts),
-or you can point the settings to `ffmpeg.exe`. The export screen tells you whether ffmpeg was found. Recording and watching
-work without ffmpeg.
+- No telemetry, no update checks. The mod goes online **only** when you click *Install ffmpeg*.
+- Server addresses are not stored in replays unless you turn it on.
+- Chat (including private messages) is hidden while watching replays unless you turn it on.
+- Replays and videos stay on your PC: `.minecraft/replays` and `.minecraft/replay_videos`.
 
 ## 🎮 Controls (all rebindable)
 
 | Key | Action |
 | --- | --- |
-| M | Add marker while recording |
+| M | Add a marker while recording |
 | ↓ | Play / pause |
 | ← / → | Back / forward 5 seconds |
 | J | Camera path editor |
 | U | Add camera keyframe |
 | Left click | Follow the entity under the crosshair |
 | Esc | Replay menu |
+| *(unbound)* | Recording on / off |
 
 ## 📋 Requirements
 
-- Minecraft **26.3**, Fabric Loader **0.19.5+**, **Fabric API**, Java 25.
-- Client-side only. Servers don't need it, and it works on any server.
+- Minecraft **26.3**, Fabric Loader **0.19.5+**, **Fabric API 0.163.0+**, Java 25.
+- Client-side only. Works on any server; servers don't need it.
 
-## ⚠ Notes
+## ⚠ Good to know
 
-- Recording starts at join, so to record an ongoing session, rejoin (the game tells you this).
-- Seeking backwards rebuilds the world; it takes well under a second for typical replays.
-- Replays play back on the same Minecraft version they were recorded on.
-- Not compatible with the original ReplayMod. Both tap the same network pipeline, so use one or the other.
-- Respect server rules. Some servers do not allow recording.
-
-## 🔒 Privacy
-
-The mod makes **no network connections** of its own: no telemetry, no update checks, no analytics.
-Replays and videos stay on your disk, in `.minecraft/replays` and `.minecraft/replay_videos`.
-The only external program it starts is ffmpeg, and only when you export a video.
+- Recording starts when you join. To record a session that is already running, rejoin.
+- Rewinding rebuilds the world from the start of the replay: well under a second for short replays, a few seconds
+  for replays of hours.
+- Replays play in the Minecraft version they were recorded in. Videos have no sound.
+- Server resource packs are not loaded in replays.
+- Not compatible with the original ReplayMod (both tap the same network pipeline).
+- Respect server rules: some servers do not allow recording.
 
 ## License
 
 MIT, open source: https://github.com/robb-devo/maniacreplay
-
-## 🛡 Is this safe?
-
-- **Open source.** The full code is on GitHub.
-- **No network connections, no telemetry.** The only program the mod ever starts is your own ffmpeg, and only when you export a video.
-- **Verify the file.** Check it on [VirusTotal](https://www.virustotal.com) and compare its SHA-256 checksum:
-  `84553f3a1e55ddaaf39a98e7f369b7411b032a36c9dd35f0c775270cd4981d7c`

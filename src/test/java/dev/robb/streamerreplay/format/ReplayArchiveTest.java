@@ -8,7 +8,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.zip.ZipFile;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,24 +52,6 @@ class ReplayArchiveTest {
 					count++;
 				}
 				assertEquals(200, count);
-			}
-		}
-	}
-
-	@Test
-	void updateEntriesKeepsPacketStream() throws IOException {
-		Path rec = record("edit", 50);
-		Path target = dir.resolve("edit" + ReplayFormat.EXTENSION);
-		ReplayArchive.finish(rec, target, new ReplayMeta(), List.of(), null);
-		ReplayArchive.updateEntries(target, Map.of(ReplayFormat.ENTRY_PATHS, "{\"version\":1}".getBytes(StandardCharsets.UTF_8)));
-		try (ZipFile zip = new ZipFile(target.toFile())) {
-			assertEquals("{\"version\":1}", new String(ReplayArchive.readEntry(zip, ReplayFormat.ENTRY_PATHS), StandardCharsets.UTF_8));
-			try (PacketStreamReader reader = ReplayArchive.openPackets(zip)) {
-				int count = 0;
-				while (reader.next()) {
-					count++;
-				}
-				assertEquals(50, count);
 			}
 		}
 	}

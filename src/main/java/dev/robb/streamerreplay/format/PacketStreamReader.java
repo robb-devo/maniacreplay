@@ -7,6 +7,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipException;
 
@@ -18,6 +19,7 @@ import java.util.zip.ZipException;
  */
 public final class PacketStreamReader implements Closeable {
 	private final DataInputStream in;
+	private final Inflater inflater = new Inflater();
 	private byte[] buffer = new byte[64 * 1024];
 	private int time;
 	private int length;
@@ -28,9 +30,9 @@ public final class PacketStreamReader implements Closeable {
 		InputStream buffered = raw instanceof BufferedInputStream ? raw : new BufferedInputStream(raw, 64 * 1024);
 		byte[] magic = buffered.readNBytes(ReplayFormat.STREAM_MAGIC.length);
 		if (!Arrays.equals(magic, ReplayFormat.STREAM_MAGIC)) {
-			throw new IOException("Not a Streamer Replay packet stream");
+			throw new IOException("Not a ManiacReplay packet stream");
 		}
-		this.in = new DataInputStream(new BufferedInputStream(new InflaterInputStream(buffered), 64 * 1024));
+		this.in = new DataInputStream(new BufferedInputStream(new InflaterInputStream(buffered, inflater), 64 * 1024));
 	}
 
 	/** Advances to the next frame. Returns {@code false} at the end of the stream. */
@@ -54,11 +56,9 @@ public final class PacketStreamReader implements Closeable {
 			length = len;
 			return true;
 		} catch (EOFException e) {
-			// A clean end happens exactly at a frame boundary after the final deflate block.
-			// "Unexpected end of ZLIB input stream" means the recording was never closed.
+			// A clean end is a frame boundary right after the final deflate block; anything else was never closed.
 			finished = true;
-			String message = e.getMessage();
-			truncated = midFrame || (message != null && message.contains("ZLIB"));
+			truncated = midFrame || !inflater.finished();
 			return false;
 		} catch (ZipException e) {
 			// The deflate stream ended abruptly: the recording was not closed properly.
@@ -87,6 +87,10 @@ public final class PacketStreamReader implements Closeable {
 
 	@Override
 	public void close() throws IOException {
-		in.close();
+		try {
+			in.close();
+		} finally {
+			inflater.end(); // a caller-supplied inflater is not ended by the stream
+		}
 	}
 }

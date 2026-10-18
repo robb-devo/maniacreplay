@@ -20,10 +20,15 @@ import java.util.zip.DeflaterOutputStream;
  * background thread which compresses and writes them. No allocation happens per frame in the steady state.
  * The deflate stream is sync-flushed on {@link #flush()} so that the file is always readable up to the
  * last flush, which makes crash recovery possible.
+ *
+ * <p>If the disk cannot keep up, at most {@link #MAX_PENDING_CHUNKS} chunks wait in memory. Beyond that the writer
+ * stops accepting frames ({@link #overflowed()}) instead of growing without limit; what was accepted stays valid.
  */
 public final class PacketStreamWriter implements AutoCloseable {
 	public static final int DEFAULT_CHUNK_SIZE = 256 * 1024;
 	private static final int POOL_SIZE = 8;
+	/** 256 chunks of 256 KB: 64 MB of unwritten data means the disk is far too slow, not briefly busy. */
+	static final int MAX_PENDING_CHUNKS = 256;
 	private static final int FRAME_HEADER = 8;
 	private static final Chunk POISON = new Chunk(0);
 
@@ -40,6 +45,7 @@ public final class PacketStreamWriter implements AutoCloseable {
 	private long frames;
 	private long rawBytes;
 	private boolean closed;
+	private volatile boolean overflowed;
 	private volatile IOException failure;
 
 	public PacketStreamWriter(Path file) throws IOException {
@@ -53,7 +59,7 @@ public final class PacketStreamWriter implements AutoCloseable {
 		this.deflater = new Deflater(compressionLevel);
 		this.deflaterOut = new DeflaterOutputStream(fileOut, deflater, 64 * 1024, true);
 		this.current = new Chunk(chunkSize);
-		this.thread = new Thread(this::runWriter, "StreamerReplay-Writer");
+		this.thread = new Thread(this::runWriter, "ManiacReplay-Writer");
 		this.thread.setDaemon(true);
 		this.thread.setPriority(Thread.NORM_PRIORITY - 1);
 		this.thread.start();
@@ -86,14 +92,17 @@ public final class PacketStreamWriter implements AutoCloseable {
 
 	/** Writes the frame header and returns a chunk with room for {@code length} payload bytes. Caller holds the lock. */
 	private Chunk reserve(int timeMs, int length) {
-		if (closed) {
+		if (closed || overflowed) {
 			return null;
 		}
 		int time = Math.max(timeMs, lastTime); // timestamps never go backwards
 		lastTime = time;
 		int needed = FRAME_HEADER + length;
 		if (current.data.length - current.length < needed) {
-			submit(false);
+			submit(false, false);
+			if (overflowed) {
+				return null;
+			}
 			if (needed > chunkSize) {
 				current = new Chunk(needed); // rare oversized frame, gets dropped after use
 			}
@@ -120,13 +129,19 @@ public final class PacketStreamWriter implements AutoCloseable {
 	public void flush() {
 		synchronized (this) {
 			if (!closed) {
-				submit(true);
+				submit(true, false);
 			}
 		}
 	}
 
-	private void submit(boolean flush) {
+	/** Queues the current chunk. Unless {@code force}d (closing), a full queue drops it and stops the writer. */
+	private void submit(boolean flush, boolean force) {
 		Chunk chunk = current;
+		if (!force && pending.size() >= MAX_PENDING_CHUNKS) {
+			overflowed = true;
+			chunk.length = 0;
+			return;
+		}
 		chunk.flush = flush;
 		if (chunk.length > 0 || flush) {
 			pending.add(chunk);
@@ -169,6 +184,11 @@ public final class PacketStreamWriter implements AutoCloseable {
 		}
 	}
 
+	/** True once frames were dropped because the disk could not keep up. Everything before stays readable. */
+	public boolean overflowed() {
+		return overflowed;
+	}
+
 	/** First I/O error that occurred on the writer thread, or {@code null}. */
 	public IOException failure() {
 		return failure;
@@ -193,7 +213,7 @@ public final class PacketStreamWriter implements AutoCloseable {
 			if (closed) {
 				return;
 			}
-			submit(true);
+			submit(true, true);
 			closed = true;
 			pending.add(POISON);
 		}

@@ -4,12 +4,14 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.robb.streamerreplay.StreamerReplay;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderPipelines;
+import org.joml.Vector4f;
 import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
@@ -19,7 +21,8 @@ import java.util.Optional;
  *
  * <p>While active, the game is told its framebuffer has the export size, so the world, post effects, shader
  * packs and the GUI all render at that size into the normal main target. Only the very last step changes:
- * the finished image is scaled down to the real window before it is shown. Mouse coordinates stay consistent
+ * the finished image is scaled to the real window before it is shown, letterboxed when the shapes differ (a 9:16
+ * export in a 16:9 window shows upright with black bars, not squashed). Mouse coordinates stay consistent
  * because vanilla maps them through the same (virtual) GUI size. Resizing the window during an export no longer
  * matters: the real size is only used for that last scaling step.
  */
@@ -27,6 +30,9 @@ public final class RenderResolution {
 	private static int width;
 	private static int height;
 	private static @Nullable TextureTarget presentTarget;
+	/** The image scaled to fit the window with the export's aspect ratio, before it is centred on black. */
+	private static @Nullable TextureTarget fitTarget;
+	private static final Vector4f BLACK = new Vector4f(0, 0, 0, 1);
 
 	private RenderResolution() {
 	}
@@ -75,6 +81,10 @@ public final class RenderResolution {
 			presentTarget.destroyBuffers();
 			presentTarget = null;
 		}
+		if (fitTarget != null) {
+			fitTarget.destroyBuffers();
+			fitTarget = null;
+		}
 	}
 
 	/**
@@ -120,18 +130,39 @@ public final class RenderResolution {
 		Window.FramebufferSize real = Minecraft.getInstance().getWindow().queryFramebufferSize();
 		int w = Math.max(1, real.width());
 		int h = Math.max(1, real.height());
-		if (presentTarget == null) {
-			presentTarget = new TextureTarget("Streamer Replay window preview", w, h, GpuFormat.RGBA8_UNORM, null);
-		} else if (presentTarget.width != w || presentTarget.height != h) {
-			presentTarget.resize(w, h);
+		presentTarget = sized(presentTarget, "ManiacReplay window preview", w, h);
+		double scale = Math.min(w / (double) width, h / (double) height);
+		int fitW = Math.max(1, (int) Math.round(width * scale));
+		int fitH = Math.max(1, (int) Math.round(height * scale));
+		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+		if (Math.abs(fitW - w) <= 1 && Math.abs(fitH - h) <= 1) {
+			scaleInto(encoder, rendered, presentTarget); // same shape as the window: one scaling pass
+			return presentTarget.getColorTextureView();
 		}
-		GpuTextureView output = presentTarget.getColorTextureView();
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "Streamer Replay preview scale", output, Optional.empty())) {
+		fitTarget = sized(fitTarget, "ManiacReplay window preview (fit)", fitW, fitH);
+		scaleInto(encoder, rendered, fitTarget);
+		encoder.clearColorTexture(presentTarget.getColorTexture(), BLACK);
+		encoder.copyTextureToTexture(fitTarget.getColorTexture(), presentTarget.getColorTexture(), 0, (w - fitW) / 2, (h - fitH) / 2, 0, 0, fitW, fitH);
+		return presentTarget.getColorTextureView();
+	}
+
+	private static TextureTarget sized(@Nullable TextureTarget target, String name, int w, int h) {
+		if (target == null) {
+			return new TextureTarget(name, w, h, GpuFormat.RGBA8_UNORM, null);
+		}
+		if (target.width != w || target.height != h) {
+			target.resize(w, h);
+		}
+		return target;
+	}
+
+	/** Draws {@code source} stretched over all of {@code target} with linear filtering. */
+	private static void scaleInto(CommandEncoder encoder, GpuTextureView source, TextureTarget target) {
+		try (RenderPass pass = encoder.createRenderPass(() -> "ManiacReplay preview scale", target.getColorTextureView(), Optional.empty())) {
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setPipeline(RenderSystem.getCompiledPipeline(RenderPipelines.TRACY_BLIT));
-			pass.setUniform("InSampler", rendered, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.setUniform("InSampler", source, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.draw(3, 1, 0, 0);
 		}
-		return output;
 	}
 }

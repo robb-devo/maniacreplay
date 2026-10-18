@@ -41,6 +41,12 @@ public final class HermiteSpline {
 			m[i] = total <= 0 ? 0 : (secant[i - 1] * dtNext + secant[i] * dtPrev) / total;
 		}
 		if (monotone) {
+			// Fritsch-Carlson: flat at local extrema, then limit the slopes so that no segment overshoots.
+			for (int i = 1; i < n - 1; i++) {
+				if (secant[i - 1] * secant[i] <= 0) {
+					m[i] = 0;
+				}
+			}
 			for (int i = 0; i < n - 1; i++) {
 				if (secant[i] == 0) {
 					m[i] = 0;

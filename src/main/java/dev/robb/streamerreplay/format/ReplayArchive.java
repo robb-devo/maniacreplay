@@ -7,23 +7,19 @@ import com.google.gson.reflect.TypeToken;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-/** Reading, writing, updating and recovering {@value ReplayFormat#EXTENSION} archives. */
+/** Reading, writing and recovering {@value ReplayFormat#EXTENSION} archives. */
 public final class ReplayArchive {
 	public static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
 	private static final TypeToken<List<Marker>> MARKER_LIST = new TypeToken<>() {
@@ -137,24 +133,6 @@ public final class ReplayArchive {
 			throw new IOException("Missing " + ReplayFormat.ENTRY_PACKETS);
 		}
 		return new PacketStreamReader(zip.getInputStream(entry));
-	}
-
-	/**
-	 * Adds or replaces small entries (meta, markers, paths) in place. Uses the JDK zip file system, which copies
-	 * untouched entries (the large packet stream) without re-compressing them.
-	 */
-	public static void updateEntries(Path archive, Map<String, byte[]> entries) throws IOException {
-		URI uri = URI.create("jar:" + archive.toUri());
-		try (FileSystem fs = FileSystems.newFileSystem(uri, Map.of())) {
-			for (Map.Entry<String, byte[]> e : entries.entrySet()) {
-				Path path = fs.getPath(e.getKey());
-				if (e.getValue() == null) {
-					Files.deleteIfExists(path);
-				} else {
-					Files.write(path, e.getValue());
-				}
-			}
-		}
 	}
 
 	public static byte[] toJson(Object value) {

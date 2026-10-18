@@ -4,6 +4,8 @@ import com.mojang.blaze3d.platform.Window;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.render.ExportSettings;
+import dev.robb.streamerreplay.path.CameraPath;
+import dev.robb.streamerreplay.render.FfmpegInstaller;
 import dev.robb.streamerreplay.render.FfmpegProbe;
 import dev.robb.streamerreplay.render.VideoExporter;
 import dev.robb.streamerreplay.replay.ReplaySession;
@@ -118,13 +120,16 @@ public final class ExportScreen extends Screen {
 		startButton = addRenderableWidget(Button.builder(Component.translatable("streamerreplay.export.start"), b -> startExport())
 			.bounds(cx - w - 4, y, w, 20).build());
 		addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> onClose()).bounds(cx + 4, y, w, 20).build());
-		startProbe(false);
+		startProbe(probeResult != null && !probeResult.ok()); // e.g. back from the help screen after installing ffmpeg
 	}
 
 	private Component resolutionLabel(ReplayConfig.ExportResolution r) {
 		if (r == ReplayConfig.ExportResolution.WINDOW) {
 			Window window = minecraft.getWindow();
 			return Component.translatable("streamerreplay.export.resolution.window", window.getWidth(), window.getHeight());
+		}
+		if (r.isVertical()) {
+			return Component.translatable("streamerreplay.export.resolution.vertical", r.width, r.height);
 		}
 		return Component.literal(r.width + " \u00D7 " + r.height);
 	}
@@ -149,6 +154,11 @@ public final class ExportScreen extends Screen {
 
 	@Override
 	public void tick() {
+		if (FfmpegInstaller.state() == FfmpegInstaller.State.DONE) { // finished in the background
+			Notifications.replay(Component.translatable("streamerreplay.toast.ffmpeg_installed", FfmpegInstaller.VERSION), null);
+			FfmpegInstaller.acknowledge();
+			startProbe(true);
+		}
 		if (probe != null && probe.isDone()) {
 			probeResult = probe.join();
 			probe = null;
@@ -189,7 +199,7 @@ public final class ExportScreen extends Screen {
 		}
 		ExportSettings settings = new ExportSettings(output, config.ffmpegPath, config.exportFps, config.exportQuality,
 			config.exportResolution.width, config.exportResolution.height, config.exportCleanFrames);
-		dev.robb.streamerreplay.path.CameraPath path = session.path();
+		CameraPath path = session.path();
 		if (!path.isPlayable()) {
 			// fixed shot from the current camera: from now for the chosen length
 			long from = (long) session.clock().timeMs();
@@ -199,7 +209,7 @@ public final class ExportScreen extends Screen {
 				from = Math.max(0, to - Math.max(1000L, shotSeconds * 1000L));
 			}
 			var pose = session.camera().pose();
-			path = new dev.robb.streamerreplay.path.CameraPath();
+			path = new CameraPath();
 			path.addAt(from, pose);
 			path.addAt(to, pose);
 		}

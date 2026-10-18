@@ -19,7 +19,8 @@ import java.nio.file.Path;
 
 /** Entry point for everything replay related: opening, per-frame driving and leaving a replay. */
 public final class ReplayManager {
-	private static @Nullable ReplaySession session;
+	/** Written on the render thread; volatile because the clean-up (saver thread) asks which file is open. */
+	private static volatile @Nullable ReplaySession session;
 
 	private ReplayManager() {
 	}
@@ -32,24 +33,30 @@ public final class ReplayManager {
 		return session != null;
 	}
 
-	/** True if the session exists and the replay world is currently shown. */
-	public static boolean isInReplayWorld() {
+	/** The replay file that is open right now, or null. Any thread. */
+	public static @Nullable Path openFile() {
 		ReplaySession current = session;
-		return current != null && current.isInWorld(Minecraft.getInstance());
+		return current == null ? null : current.file();
 	}
 
 	public static boolean isReplayChannel(Channel channel) {
 		return ReplayChannel.isReplayChannel(channel);
 	}
 
-	/** Opens a replay. Leaves the current world first. */
+	/** Opens a replay at its start. Leaves the current world first. */
 	public static void open(Path file, Screen parent) {
+		open(file, parent, 0);
+	}
+
+	/** Opens a replay and starts watching at {@code startMs} (e.g. just before a marker). */
+	public static void open(Path file, Screen parent, long startMs) {
 		Minecraft mc = Minecraft.getInstance();
 		if (session != null) {
 			exit();
 		}
 		try {
 			ReplaySession opened = ReplaySession.open(file, parent);
+			opened.clock().setTime(startMs);
 			if (mc.level != null) {
 				mc.disconnectFromWorld(Component.empty());
 			}

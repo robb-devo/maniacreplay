@@ -5,4 +5,5 @@ logs/
 out/
 *.iml
 .idea/
-dist/*.log
+# release jars are attached to GitHub releases, not committed
+dist/

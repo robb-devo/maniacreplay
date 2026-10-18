@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.2.0 (Minecraft 26.3, Fabric)
+
+- **Recording on/off in the pause menu.** One switch, top left: off stops and saves the running recording and
+  nothing is recorded until you turn it back on. The same switch is in the settings ("Record: Everywhere /
+  Worlds only / Servers only / Off") and on an optional hotkey.
+- **ffmpeg in one click (Windows).** The ffmpeg help screen has an *Install ffmpeg* button: it downloads ffmpeg
+  9.0.2 (Gyan's essentials build, the one `winget install ffmpeg` installs), checks its SHA-256 against the value
+  in the mod and puts `ffmpeg.exe` into `.minecraft/ffmpeg`. Nothing is downloaded unless you click it.
+- **Rewinding looks like a video player.** The last picture stays on screen with a small "Rewinding" badge while
+  the world is rebuilt, instead of loading screens. Pressing ← several times in a row now rebuilds only once.
+- **Start at a marker.** Markers show as ⚑ chips in the replay browser; a click starts the replay 10 s before the
+  marker. On the timeline, clicking a marker jumps exactly to it.
+- **Old replays are cleaned up** after 30 days (new installs; choose Never/7/14/30/90 days in the settings).
+  Replays with markers or a name you gave them are always kept. Updating from 1.1.x keeps everything until you
+  pick a value.
+- **Chat is hidden in replays** by default, so private messages never show up on stream (setting: *Chat in Replays*).
+- **Vertical video**: new 1080 × 1920 export preset for Shorts, TikTok and Reels, previewed upright in the window.
+- **Edit keyframes**: the ✔ button in the editor updates the selected keyframe with the current camera; ✘ removes it.
+- **Export without ffmpeg is about 6× faster**: PNG frames are now written by several threads.
+- **Crisper look, still vanilla style**: panels and bars have a one pixel bevel, markers are little flags on the
+  timeline, the playhead has an outline, a faint line shows where a click jumps, the REC dot pulses calmly instead
+  of blinking, and the pause menu switch shows a red ● while recording.
+- The controls hint in replays wraps onto two lines instead of running off small screens (long key names).
+- **REC badge**: "REC" in red, the time in white and the marker count as a gold ⚑. Setting a marker makes the
+  badge light up gold instead of showing a toast on stream (the toast stays when the badge is hidden).
+- **Markers in replays**: when playback passes a marker, its name shows above the timeline for a moment.
+  **Ctrl + ← / →** (or Ctrl-click on « / » in the editor) jumps to the previous / next marker.
+- The settings show how much space your replays use, next to the clean-up option.
+- **Camera path in the world**: the keyframe selected in the editor is highlighted (white with a gold frame),
+  numbers sit on small dark plates, and the path gets lighter towards its end so the direction is visible.
+  Timeline keyframes have an outline; the current time is white, the total dimmed.
+- Export defaults for new installs: 1080p and *Balanced* quality (faster to encode, hardly any visible difference).
+- Fixes:
+  - FOV and pitch could overshoot at a peak between unevenly spaced keyframes (e.g. 70 → 90 → 30 reached ~94).
+  - Leaving a replay no longer rewrites the whole replay file: the camera path is kept in the small `.paths` file
+    next to it (paths from 1.1.x are still read).
+  - A disk that cannot keep up no longer makes recording use more and more memory; the recording is stopped and
+    saved instead, with a message.
+  - Windows device names (CON, NUL, …) are rejected when renaming.
+  - A late thumbnail could leave a stray `.thumb` file next to a saved replay.
+- Tested end to end on Windows 11 with a real GPU, in English and German.
+
+**SHA-256** of `maniacreplay-1.2.0.jar`:
+`75650830ccb4ab6f650f8b38f0429fc164510079877a67ead2dd5e0026578bfc`
+
 ## 1.1.2 (Minecraft 26.3, Fabric)
 
 - **New name: ManiacReplay** (formerly Streamer Replay), with a new icon. Mod id, settings, recordings and key bindings are unchanged, so updating keeps everything. Jar: `maniacreplay-1.1.2.jar`.

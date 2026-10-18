@@ -25,7 +25,7 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 | `replay` | Playback: the fake connection, the replay clock, the free/follow camera, seeking. |
 | `path` | Camera paths: keyframes and the smooth curve between them. Pure maths with unit tests. |
 | `render` | Video export: rendering frame by frame and piping the frames to ffmpeg. Also draws the path preview. |
-| `library` | The replay folder: listing, renaming, deleting, crash recovery. |
+| `library` | The replay folder: listing, renaming, deleting, crash recovery, automatic clean-up. |
 | `ui` | Every screen and HUD element (browser, editor, timeline, export, settings, REC badge). |
 | `input` | Keybinds. |
 | `mixin` | Small hooks into Minecraft's own code (see "Compatibility" below). |
@@ -36,12 +36,15 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 1. **Tap.** Every network connection the game opens gets a tiny pass-through listener, `RecordingTap`. It sits
    in the network pipeline *after* decryption and decompression, so it sees each message exactly as the game
    will read it. While nothing is recorded it does a single check per message and nothing else.
-2. **Start.** When the server accepts your login, `RecordingManager` checks the settings (singleplayer and/or
-   multiplayer), creates a `Recorder`, and attaches it to the tap. Recording is automatic.
+2. **Start.** When the server accepts your login, `RecordingManager` checks the settings (the recording switch,
+   and whether worlds and/or servers are recorded), creates a `Recorder`, and attaches it to the tap. The switch is
+   in the settings and in the top left corner of the vanilla pause menu (`PauseMenuRecordingButton`); turning it
+   off stops and saves the running recording.
 3. **Write without stutter.** The network thread copies each message into a large reusable memory block (a
    "chunk"). `PacketStreamWriter` hands full chunks to its own background thread, which compresses them and writes
    them to a `.rec` file. Memory is reused, so there are no per-message allocations. Disk work never happens on
-   the game thread.
+   the game thread. If the disk falls far behind (64 MB waiting), the writer stops taking data and the recording
+   is saved with a message, instead of using more and more memory.
 4. **Your own player.** The server never sends you your own movements, because your game already knows them.
    `SelfPlayerRecorder` adds them as extra messages, so you are visible in the replay as well.
 5. **Markers and thumbnail.** Pressing M stores a marker (time and name). After a few seconds a small
@@ -51,6 +54,9 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 7. **Crash safety.** The writer flushes about every second in a format that stays readable up to the last flush.
    If the game crashes, `RecoveryService` finds the left-over `.rec` on the next start and turns it into a
    normal replay marked as "recovered".
+8. **Clean-up.** After each save and once at start-up, `ReplayLibrary.cleanUp` deletes replays older than the
+   configured number of days (default 30 for new installs, off for updates from 1.1.x). `CleanupPolicy` keeps
+   every replay that has a marker or a name the player gave it, so nothing the player cared about disappears.
 
 ## Playback
 
@@ -58,7 +64,9 @@ compatible (the game does its normal work, so render mods such as Sodium still a
    it like to any server. Instead of network data, it receives the recorded messages.
 2. **Filtering.** `ReplayPacketFilter` adjusts a few messages so that you watch as a spectator instead of
    controlling the recorded player. For example, the "you are this player" information is replaced, and messages
-   that would move your camera or open inventories are dropped.
+   that would move your camera or open inventories are dropped. Chat is dropped too unless the player turned it on
+   (a replay shown on stream must not show private messages); the action bar stays. Server resource packs are not
+   loaded, since the mod never downloads anything on its own.
 3. **Replay clock.** `ReplayClock` decides the current replay time and supports play/pause, speed and jumps.
    Each frame, all messages up to that time are delivered. Game ticks (animations, entity movement) are derived
    from replay time rather than wall time, so pause and slow motion affect the world but not the menus.
@@ -71,8 +79,10 @@ compatible (the game does its normal work, so render mods such as Sodium still a
 4. **Seeking.**
    - Forward: the session delivers the messages in between quickly.
    - Backward: the session rebuilds the world from the start and fast-forwards. The messages describe *changes*,
-     so there is no other way to go back in time. An overlay shows while this runs, and your camera position and
-     any open editor are restored afterwards.
+     so there is no other way to go back in time. `RewindOverlay` first grabs the current picture and keeps it on
+     screen (over the loading screens) with a small "Rewinding" badge until the world at the new time is complete,
+     so a rewind looks like a video player buffering. Your camera position and any open editor are restored
+     afterwards. Presses of ±5 s within 300 ms are bundled into one rebuild (`ReplaySession.nudge`).
    - Measured: ~0.3–0.5 s, almost all of it the fixed reconnect + level-load cost; packet delivery is ~1.3 ms per
      recorded second. A bigger per-frame delivery budget during seeks was tried and was not faster, so it was dropped.
    - Checkpoints (periodic snapshots to jump back to) were rejected: the client's world (chunks with light, entities
@@ -91,7 +101,9 @@ compatible (the game does its normal work, so render mods such as Sodium still a
   - Rotation always takes the short way round (`AngleMath`).
   - FOV never overshoots.
 - `PathPlayer` moves the camera along the curve. It is used for the live preview and for export.
-- Paths are saved next to the replay as a small `.paths` file, so the replay itself is never modified.
+- Paths are saved (in the background) next to the replay as a small `.paths` file, so the large replay file is
+  never rewritten. Replays from 1.1.x carry their path inside the archive; it is read from there if no `.paths`
+  file exists. The editor's ✔ button overwrites the selected keyframe with the current camera.
 - `PathPreviewRenderer` draws the path over the world while the editor is open: a dotted curve, keyframe markers
   and numbers. It projects the 3D path points through the current camera onto the screen, like a tiny
   camera of its own. That works no matter which renderer or shader pack draws the world.
@@ -104,10 +116,11 @@ compatible (the game does its normal work, so render mods such as Sodium still a
    - waits until the world has finished building
    - captures the image
    - skips any render that is not at the export size (for example a screenshot tool rendering at window size)
-2. **Native resolution.** `RenderResolution` tells the game its framebuffer has the export size (for example 1920×1080),
-   so the world, post effects, shader packs and GUI all render at that size into the normal main target. Only the very
-   last step changes: the finished image is scaled down to the real window for the on-screen preview. A window resize
-   only re-applies the virtual size. Sizes above the GPU's texture limit are clamped and scaled by ffmpeg.
+2. **Native resolution.** `RenderResolution` tells the game its framebuffer has the export size (for example 1920×1080,
+   or 1080×1920 for vertical video), so the world, post effects, shader packs and GUI all render at that size into the
+   normal main target. Only the very last step changes: the finished image is scaled to the real window for the
+   on-screen preview, letterboxed with black bars when the shapes differ. A window resize only re-applies the virtual
+   size. Sizes above the GPU's texture limit are clamped and scaled by ffmpeg.
 3. **Clean frames.** `CleanFrames` is on while an export with "hide name tags & overlays" runs. Small hooks then
    drop name tags (`EntityRendererMixin`), the block outline (`LevelExtractorMixin`) and debug gizmos such as hitboxes
    (`DebugRendererMixin`), and mark the HUD hidden (which also hides the hand). The 2D HUD and menus are never in the
@@ -116,21 +129,28 @@ compatible (the game does its normal work, so render mods such as Sodium still a
    graphics card and the CPU work at the same time.
 5. **Encode.** `FfmpegEncoder` pipes the raw frames to an external ffmpeg process on its own writer thread. It uses H.264
    (`libx264`) when available and MPEG-4 otherwise. Next to the video it writes a log file, for troubleshooting.
+   Without ffmpeg, `PngSequenceWriter` saves numbered PNG images instead (both implement `FrameSink`). Without a
+   camera path, `ExportScreen` films a fixed shot from the current camera for the chosen length.
    `FfmpegLocator` finds ffmpeg when the setting is just `ffmpeg`: PATH first, then a copy in the game folder, then
    where WinGet, Scoop, Chocolatey, Homebrew and MacPorts put it. That matters because launchers often do not see the
-   PATH of the user's terminal. It only checks which files exist; it never downloads or runs anything else.
+   PATH of the user's terminal. It only checks which files exist.
+   On Windows, `FfmpegInstaller` can install ffmpeg when the player clicks *Install ffmpeg*: it downloads one pinned
+   file (Gyan's ffmpeg 9.0.2 essentials build from GitHub), checks its SHA-256 against the value in the source and
+   unpacks only `ffmpeg.exe` to `.minecraft/ffmpeg`. This is the mod's only network access.
 6. Export runs at whatever speed your PC manages, while the video plays back smoothly at the chosen FPS.
    Cancelling deletes the half-written file.
 
 ## User interface
 
 - **Title screen.** A film-strip button opens the **browser** (`ReplayBrowserScreen`), which shows thumbnails, names,
-  dates and durations. It loads all of this in the background.
+  dates and durations, and every marker as a clickable ⚑ chip that starts the replay 10 s before it. It loads all
+  of this in the background.
 - **While watching.** A slim bar shows play state, time, timeline and speed (`ReplayHud`). A short hint fades out after
   10 seconds. Esc opens the replay menu.
 - **Editor** (`ReplayEditorScreen`): timeline with keyframes and markers, transport buttons, speed, FOV, roll,
   keyframe buttons, preview and export.
 - **Recording.** A small REC badge (`RecordingIndicatorHud`) shows while recording. It can be turned off for a clean stream.
+  The recording switch sits in the top left corner of the pause menu.
 
 ## Compatibility and performance principles
 
@@ -153,12 +173,9 @@ compatible (the game does its normal work, so render mods such as Sodium still a
   - builds a camera path and exports a video
   - uses mouse look, flying and clicks while paused
   - exports at native 1080p (checked with ffprobe and a sharpness measure) and with clean frames on/off (frames compared)
+  - exports a 9:16 video (1080×1920, checked with ffprobe)
 - Add `-PcompatMods=a.jar,b.jar` to run the same test with other mods loaded, for example Sodium, Iris and Lithium,
   and `-PshaderPack=pack.zip` to enable an Iris shader pack.
 - `scripts/crash-recovery-test.sh` kills the game with SIGKILL mid-recording, restarts it and checks the recovered replay.
 - Recording a session that is already running is deliberately not supported (see README, *Known limitations*); the
   game explains how to record instead.
-
-## 1.1.1
-
-- `render/FrameSink` abstracts the encoder; `FfmpegEncoder` (MP4) and `PngSequenceWriter` (fallback, writer thread, pooled buffers) implement it. Without a camera path, `ExportScreen` builds a temporary two-keyframe path at the current pose and hands it to `VideoExporter`/`ReplaySession.playPathForExport(CameraPath)`.

@@ -37,7 +37,7 @@ public final class ReplayBrowserScreen extends Screen {
 	@Override
 	protected void init() {
 		if (list == null) {
-			list = new ReplayBrowserList(minecraft, width, height - 32 - 64, 32, this::watch);
+			list = new ReplayBrowserList(minecraft, width, height - 32 - 64, 32, this::watch, this::watchFrom);
 			refresh(true);
 		} else {
 			list.updateSizeAndPosition(width, height - 32 - 64, 32);
@@ -99,8 +99,12 @@ public final class ReplayBrowserScreen extends Screen {
 	}
 
 	private void watch(ReplayInfo info) {
+		watchFrom(info, 0);
+	}
+
+	private void watchFrom(ReplayInfo info, long startMs) {
 		if (info.readable()) {
-			ReplayManager.open(info.file(), this);
+			ReplayManager.open(info.file(), this, startMs);
 		}
 	}
 

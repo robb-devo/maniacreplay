@@ -10,32 +10,51 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 
 /** User settings, persisted as {@code config/streamerreplay.json}. Access via {@link #get()}. */
 public final class ReplayConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static ReplayConfig instance = new ReplayConfig();
 
+	/** Choices for {@link #cleanupDays}; 0 = keep everything. */
+	public static final List<Integer> CLEANUP_CHOICES = List.of(0, 7, 14, 30, 90);
+	private static final int NEW_INSTALL_CLEANUP_DAYS = 30;
+
 	// Recording
+	/** The one switch players care about: record automatically when joining a world (also in the pause menu). */
+	public boolean recordingEnabled = true;
 	public boolean recordSingleplayer = true;
 	public boolean recordMultiplayer = true;
 	public boolean showRecordingIndicator = true;
 	/** Server IPs are hidden by default so a replay file can be shared or shown on stream safely. */
 	public boolean storeServerAddress = false;
+	/**
+	 * Delete untouched replays (no markers, not renamed) after this many days; 0 = never. Boxed so that a config
+	 * written by an older version, which never asked about this, is detected and keeps everything.
+	 */
+	public Integer cleanupDays;
 
 	// Replay viewer
 	public boolean showControlsHint = true;
 	public float cameraSmoothing = 0.6F;
+	/** Recorded chat (including private messages) stays hidden in replays unless turned on. */
+	public boolean showChatInReplay = false;
 
 	// Video export
 	public String ffmpegPath = "ffmpeg";
 	public int exportFps = 60;
-	public ExportQuality exportQuality = ExportQuality.HIGH;
-	public ExportResolution exportResolution = ExportResolution.WINDOW;
+	public ExportQuality exportQuality = ExportQuality.BALANCED;
+	public ExportResolution exportResolution = ExportResolution.FULL_HD_1080;
 	public boolean exportCleanFrames = true;
 
 	public static ReplayConfig get() {
 		return instance;
+	}
+
+	/** Days after which untouched replays are deleted; 0 = never. */
+	public int cleanupAfterDays() {
+		return cleanupDays == null ? 0 : cleanupDays;
 	}
 
 	public static Path file() {
@@ -46,6 +65,7 @@ public final class ReplayConfig {
 		Path file = file();
 		if (!Files.exists(file)) {
 			instance = new ReplayConfig();
+			instance.cleanupDays = NEW_INSTALL_CLEANUP_DAYS;
 			instance.save();
 			return;
 		}
@@ -66,10 +86,13 @@ public final class ReplayConfig {
 			exportFps = 60;
 		}
 		if (exportQuality == null) {
-			exportQuality = ExportQuality.HIGH;
+			exportQuality = ExportQuality.BALANCED;
 		}
 		if (exportResolution == null) {
-			exportResolution = ExportResolution.WINDOW;
+			exportResolution = ExportResolution.FULL_HD_1080;
+		}
+		if (cleanupDays == null || !CLEANUP_CHOICES.contains(cleanupDays)) {
+			cleanupDays = 0; // written by a version without clean-up: never delete anything unasked
 		}
 		cameraSmoothing = Math.max(0, Math.min(0.95F, cameraSmoothing));
 		return this;
@@ -108,7 +131,9 @@ public final class ReplayConfig {
 		HD_720(1280, 720),
 		FULL_HD_1080(1920, 1080),
 		QHD_1440(2560, 1440),
-		UHD_2160(3840, 2160);
+		UHD_2160(3840, 2160),
+		/** 9:16 for Shorts, TikTok and Reels. */
+		VERTICAL_1080(1080, 1920);
 
 		public final int width;
 		public final int height;
@@ -116,6 +141,10 @@ public final class ReplayConfig {
 		ExportResolution(int width, int height) {
 			this.width = width;
 			this.height = height;
+		}
+
+		public boolean isVertical() {
+			return height > width;
 		}
 	}
 }

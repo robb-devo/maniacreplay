@@ -35,7 +35,8 @@ public final class PathPreviewRenderer {
 	}
 
 	/** Called from the editor screen's background pass (below its panel and widgets), in GUI coordinates. */
-	public static void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, int width, int height) {
+	/** {@code selected}: the keyframe chosen in the editor (highlighted), or -1. */
+	public static void draw(GuiGraphicsExtractor g, Font font, ReplaySession session, int width, int height, int selected) {
 		CameraPath path = session.path();
 		if (path.isEmpty() || session.isPlayingPath() || VideoExporter.isExporting()) {
 			return;
@@ -47,13 +48,14 @@ public final class PathPreviewRenderer {
 		Projector p = PROJECTOR;
 		p.setup(camera, width, height);
 
-		// dotted curve: one 2x2 dot per sample that lands on screen (with a dark outline for contrast)
+		// dotted curve: one 2x2 dot per sample that lands on screen (with a dark outline for contrast); the dots get
+		// lighter towards the end, so the direction of the flight is visible at a glance
 		for (int i = 0; i + 2 < curve.length; i += 3) {
 			if (p.project(curve[i], curve[i + 1], curve[i + 2], scratch)) {
 				int x = (int) scratch[0];
 				int y = (int) scratch[1];
 				g.fill(x - 2, y - 2, x + 2, y + 2, SHADOW);
-				g.fill(x - 1, y - 1, x + 1, y + 1, DOT_COLOR);
+				g.fill(x - 1, y - 1, x + 1, y + 1, towardsWhite(DOT_COLOR, 0.6F * i / Math.max(1, curve.length - 3)));
 			}
 		}
 		for (int i = 0; i < path.size(); i++) {
@@ -67,10 +69,26 @@ public final class PathPreviewRenderer {
 			if (p.project(c.x() + look.x * 0.9, c.y() + look.y * 0.9, c.z() + look.z * 0.9, scratch)) {
 				drawDottedLine(g, x, y, (int) scratch[0], (int) scratch[1]);
 			}
-			g.fill(x - 5, y - 5, x + 5, y + 5, SHADOW);
-			g.fill(x - 4, y - 4, x + 4, y + 4, DOT_COLOR);
-			g.centeredText(font, Integer.toString(i + 1), x, y - 15, Theme.TEXT);
+			boolean chosen = i == selected;
+			g.fill(x - 5, y - 5, x + 5, y + 5, chosen ? Theme.MARKER : SHADOW);
+			g.fill(x - 4, y - 4, x + 4, y + 4, chosen ? Theme.TEXT : DOT_COLOR);
+			// the number sits on a small dark plate, readable on sky, sand and snow alike
+			String label = Integer.toString(i + 1);
+			int lw = font.width(label);
+			int ly = y - 17;
+			g.fill(x - lw / 2 - 3, ly - 2, x - lw / 2 + lw + 3, ly + 9, 0xA0000000);
+			g.text(font, label, x - lw / 2, ly, chosen ? Theme.MARKER : Theme.TEXT, false);
 		}
+	}
+
+	private static int towardsWhite(int color, float amount) {
+		int r = (color >> 16) & 0xFF;
+		int gr = (color >> 8) & 0xFF;
+		int b = color & 0xFF;
+		r += Math.round((255 - r) * amount);
+		gr += Math.round((255 - gr) * amount);
+		b += Math.round((255 - b) * amount);
+		return (color & 0xFF000000) | (r << 16) | (gr << 8) | b;
 	}
 
 	/** Diagnostics for tests: where each keyframe lands on a screen of the given size. */

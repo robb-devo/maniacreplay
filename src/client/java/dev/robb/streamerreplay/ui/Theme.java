@@ -24,10 +24,17 @@ public final class Theme {
 	private Theme() {
 	}
 
-	/** Translucent panel with a one pixel top highlight. */
+	/** Translucent panel with a one pixel top highlight and bottom shadow, like a vanilla bevel. */
 	public static void panel(GuiGraphicsExtractor g, int x0, int y0, int x1, int y1) {
 		g.fill(x0, y0, x1, y1, PANEL);
 		g.horizontalLine(x0, x1 - 1, y0, PANEL_BORDER);
+		g.horizontalLine(x0, x1 - 1, y1 - 1, 0x50000000);
+	}
+
+	/** A marker flag: a pole from {@code top} to {@code bottom} with a small square flag at the top. */
+	public static void flag(GuiGraphicsExtractor g, int x, int top, int bottom, int color) {
+		g.fill(x, top, x + 1, bottom, color);
+		g.fill(x + 1, top, x + 4, top + 3, color);
 	}
 
 	/** Small diamond, used for keyframes. */
@@ -44,7 +51,18 @@ public final class Theme {
 		int filled = Math.round(width * Math.max(0, Math.min(1, progress)));
 		if (filled > 0) {
 			g.fill(x, y, x + filled, y + height, color);
+			if (height >= 3) {
+				g.fill(x, y, x + filled, y + 1, lighter(color)); // one pixel highlight, crisp on any background
+			}
 		}
+	}
+
+	/** The colour mixed a third of the way towards white. */
+	public static int lighter(int color) {
+		int r = (color >> 16) & 0xFF;
+		int gr = (color >> 8) & 0xFF;
+		int b = color & 0xFF;
+		return (color & 0xFF000000) | ((r + (255 - r) / 3) << 16) | ((gr + (255 - gr) / 3) << 8) | (b + (255 - b) / 3);
 	}
 
 	public static int withAlpha(int color, float alpha) {

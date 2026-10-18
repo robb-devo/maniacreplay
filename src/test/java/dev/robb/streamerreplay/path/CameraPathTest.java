@@ -39,6 +39,18 @@ class CameraPathTest {
 	}
 
 	@Test
+	void monotoneSplineStaysFlatAtAPeak() {
+		// Uneven spacing around a peak made the averaged tangent point the wrong way (FOV 70 -> 90 -> 30 went to ~94).
+		double[] t = {0, 1000, 1100};
+		double[] v = {70, 90, 30};
+		HermiteSpline spline = new HermiteSpline(t, v, true);
+		for (int ms = 0; ms <= 1100; ms++) {
+			double value = spline.evaluate(ms);
+			assertTrue(value <= 90 + 1e-9 && value >= 30 - 1e-9, "overshoot at " + ms + ": " + value);
+		}
+	}
+
+	@Test
 	void yawTakesShortestWayAroundTheCircle() {
 		CameraPath path = new CameraPath();
 		path.addAt(0, at(0, 170));

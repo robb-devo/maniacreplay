@@ -1,6 +1,7 @@
 package dev.robb.streamerreplay.ui.widget;
 
 import dev.robb.streamerreplay.format.Marker;
+import org.jspecify.annotations.Nullable;
 import dev.robb.streamerreplay.path.Keyframe;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.Theme;
@@ -20,7 +21,7 @@ import java.util.function.IntConsumer;
  * The replay timeline: progress, markers, camera keyframes and the playhead.
  *
  * <p>Click or drag to scrub; the seek happens on release so that dragging backwards does not rebuild the world on
- * every mouse move. Clicking a keyframe diamond selects it.
+ * every mouse move. Clicking a keyframe diamond selects it, clicking a marker jumps exactly to it.
  */
 public final class TimelineWidget extends AbstractWidget {
 	private static final int KEYFRAME_ROW = 7;
@@ -63,8 +64,7 @@ public final class TimelineWidget extends AbstractWidget {
 		double now = dragging ? dragTime : session.clock().timeMs();
 
 		// track
-		g.fill(x0, trackY, x1, trackY + TRACK_HEIGHT, Theme.TRACK);
-		g.fill(x0, trackY, xOf(now), trackY + TRACK_HEIGHT, Theme.TRACK_PLAYED);
+		Theme.progressBar(g, x0, trackY, getWidth(), TRACK_HEIGHT, (float) (now / duration()), Theme.TRACK_PLAYED);
 
 		// camera path range + keyframes
 		List<Keyframe> keyframes = session.path().keyframes();
@@ -76,21 +76,31 @@ public final class TimelineWidget extends AbstractWidget {
 		int hoveredKeyframe = keyframeAt(mouseX, mouseY);
 		for (int i = 0; i < keyframes.size(); i++) {
 			int color = i == selectedKeyframe || i == hoveredKeyframe ? Theme.KEYFRAME_SELECTED : Theme.KEYFRAME;
-			Theme.diamond(g, xOf(keyframes.get(i).replayTimeMs()), getY() + 3, 3, color);
+			int kx = xOf(keyframes.get(i).replayTimeMs());
+			Theme.diamond(g, kx, getY() + 3, 4, 0x90000000); // outline: crisp on the track and on the world behind
+			Theme.diamond(g, kx, getY() + 3, 3, color);
 		}
 
 		// markers
 		Marker hoveredMarker = null;
 		for (Marker marker : session.markers()) {
 			int mx = xOf(marker.timeMs());
-			g.fill(mx, trackY - 1, mx + 1, trackY + TRACK_HEIGHT + 2, Theme.MARKER);
-			if (isHovered() && Math.abs(mouseX - mx) <= 2 && mouseY >= trackY - 1) {
+			boolean hot = isHovered() && Math.abs(mouseX - mx) <= 2 && mouseY >= trackY - 1;
+			if (hot) {
 				hoveredMarker = marker;
 			}
+			Theme.flag(g, mx, trackY - 3, trackY + TRACK_HEIGHT + 1, hot ? Theme.TEXT : Theme.MARKER);
 		}
 
-		// playhead
+		// where a click would jump to
+		if (isHovered() && !dragging && hoveredMarker == null && hoveredKeyframe < 0) {
+			int hx = Math.max(x0, Math.min(x1 - 1, mouseX));
+			g.fill(hx, trackY, hx + 1, trackY + TRACK_HEIGHT, 0x90FFFFFF);
+		}
+
+		// playhead, with a dark outline so it stays visible on every colour
 		int px = xOf(now);
+		g.fill(px - 2, trackY - 3, px + 2, trackY + TRACK_HEIGHT + 3, 0x90000000);
 		g.fill(px - 1, trackY - 2, px + 1, trackY + TRACK_HEIGHT + 2, Theme.PLAYHEAD);
 
 		if (dragging || isHovered()) {
@@ -123,11 +133,29 @@ public final class TimelineWidget extends AbstractWidget {
 		return best;
 	}
 
+	private @Nullable Marker markerAt(double mouseX, double mouseY) {
+		int trackY = getY() + KEYFRAME_ROW;
+		if (mouseY < trackY - 1 || mouseY > trackY + TRACK_HEIGHT + 2) {
+			return null;
+		}
+		for (Marker marker : session.markers()) {
+			if (Math.abs(mouseX - xOf(marker.timeMs())) <= 2) {
+				return marker;
+			}
+		}
+		return null;
+	}
+
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
 		int keyframe = keyframeAt(event.x(), event.y());
 		if (keyframe >= 0) {
 			onKeyframeClicked.accept(keyframe);
+			return;
+		}
+		Marker marker = markerAt(event.x(), event.y());
+		if (marker != null) {
+			session.seek(marker.timeMs()); // snap: hitting a 1 px line exactly is hard
 			return;
 		}
 		dragging = true;
@@ -164,16 +192,18 @@ public final class TimelineWidget extends AbstractWidget {
 	public static void drawCompact(GuiGraphicsExtractor g, ReplaySession session, int x, int y, int width) {
 		long duration = Math.max(1, session.clock().durationMs());
 		double now = session.clock().timeMs();
-		g.fill(x, y, x + width, y + 3, Theme.TRACK);
-		g.fill(x, y, x + (int) (width * Math.min(1, now / duration)), y + 3, Theme.TRACK_PLAYED);
+		Theme.progressBar(g, x, y, width, 3, (float) Math.min(1, now / duration), Theme.TRACK_PLAYED);
 		for (Marker marker : session.markers()) {
 			int mx = x + (int) ((width - 1) * Math.min(1, marker.timeMs() / (double) duration));
-			g.fill(mx, y - 1, mx + 1, y + 4, Theme.MARKER);
+			Theme.flag(g, mx, y - 3, y + 4, Theme.MARKER);
 		}
 		for (Keyframe keyframe : session.path().keyframes()) {
 			int kx = x + (int) ((width - 1) * Math.min(1, keyframe.replayTimeMs() / (double) duration));
 			g.fill(kx, y - 2, kx + 1, y, Theme.KEYFRAME);
 		}
+		int px = x + (int) ((width - 1) * Math.min(1, now / duration));
+		g.fill(px - 1, y - 2, px + 2, y + 5, 0x90000000);
+		g.fill(px, y - 1, px + 1, y + 4, Theme.PLAYHEAD);
 	}
 
 	static Minecraft mc() {

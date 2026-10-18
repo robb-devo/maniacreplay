@@ -38,7 +38,7 @@ public final class FfmpegEncoder implements FrameSink {
 		this.process = process;
 		this.logFile = logFile;
 		this.stdin = new BufferedOutputStream(process.getOutputStream(), 1 << 20);
-		this.writer = Thread.ofPlatform().name("StreamerReplay-ffmpeg-writer").daemon().start(this::writeLoop);
+		this.writer = Thread.ofPlatform().name("ManiacReplay-ffmpeg-writer").daemon().start(this::writeLoop);
 	}
 
 	/** Starts ffmpeg. ffmpeg's own log goes to {@code logFile}. */

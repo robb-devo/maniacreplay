@@ -3,8 +3,10 @@ package dev.robb.streamerreplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.library.RecoveryService;
+import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.ui.Notifications;
+import dev.robb.streamerreplay.ui.PauseMenuRecordingButton;
 import dev.robb.streamerreplay.ui.TitleScreenButton;
 import dev.robb.streamerreplay.ui.hud.RecordingIndicatorHud;
 import dev.robb.streamerreplay.ui.hud.ReplayHud;
@@ -36,7 +38,9 @@ public final class StreamerReplayClient implements ClientModInitializer {
 		ScreenEvents.AFTER_INIT.register(TitleScreenButton::onScreenInit);
 		ClientPreAttackCallback.EVENT.register(EntityPicker::onAttack);
 
-		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> RecoveryService.recoverAsync());
+		ScreenEvents.AFTER_INIT.register(PauseMenuRecordingButton::onScreenInit);
+		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> RecoveryService.recoverAsync()
+			.thenRunAsync(ReplayLibrary::cleanUp, RecordingManager.saver()));
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> RecordingManager.shutdown());
 		StreamerReplay.LOGGER.info("ManiacReplay {} ready", StreamerReplay.version());
 	}

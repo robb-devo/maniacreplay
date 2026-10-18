@@ -237,7 +237,7 @@ public final class VideoExporter {
 		}
 		GpuBuffer buffer = freeBuffers.poll();
 		if (buffer == null) {
-			buffer = RenderSystem.getDevice().createBuffer(() -> "Streamer Replay export frame", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, frameBytes);
+			buffer = RenderSystem.getDevice().createBuffer(() -> "ManiacReplay export frame", GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, frameBytes);
 		}
 		GpuBuffer target0 = buffer;
 		inFlight++;

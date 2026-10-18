@@ -150,16 +150,24 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				ctx.waitTicks(10);
 				if (i == 6) {
 					ctx.runOnClient(mc -> RecordingManager.addMarker());
+					ctx.waitTicks(4);
+					ctx.takeScreenshot("02a_marker_flash_in_badge");
 				}
 			}
 			sp.getServer().runCommand(String.format("setblock %d %d %d minecraft:emerald_block", x, y + 3, z + 3));
 			ctx.waitTicks(40);
-			// stop with the key, press it again: the toast must explain how to record (joining mid-session is not supported)
-			ctx.runOnClient(dev.robb.streamerreplay.input.ReplayKeys::stopRecordingPressed);
+			// the recording switch in the pause menu
+			ctx.runOnClient(mc -> mc.gui.setScreen(new net.minecraft.client.gui.screens.PauseScreen(true)));
+			ctx.waitTicks(5);
+			ctx.takeScreenshot("02c_pause_menu_recording_switch");
+			ctx.runOnClient(mc -> mc.gui.setScreen(null));
+			// switching recording off stops and saves; switching it back on explains that the next join records
+			// (joining mid-session is not supported)
+			ctx.runOnClient(mc -> RecordingManager.setRecordingEnabled(false));
 			ctx.waitFor(mc -> !RecordingManager.isRecording(), 100);
 			ctx.waitTicks(10);
 			ctx.runOnClient(mc -> mc.gui.toastManager().clear());
-			ctx.runOnClient(dev.robb.streamerreplay.input.ReplayKeys::stopRecordingPressed);
+			ctx.runOnClient(mc -> RecordingManager.setRecordingEnabled(true));
 			ctx.waitTicks(15);
 			String hint = ctx.computeOnClient(mc -> {
 				var toast = mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.SystemToast.class, dev.robb.streamerreplay.ui.Notifications.RECORDING);
@@ -167,7 +175,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				return (toast == null ? "no toast" : "toast") + " " + (why == null ? "-" : ((net.minecraft.network.chat.contents.TranslatableContents) why.getContents()).getKey());
 			});
 			StreamerReplay.LOGGER.info("[gametest] not-recording hint: {}", hint);
-			check(hint.equals("toast streamerreplay.toast.not_recording.rejoin"), "pressing stop without a recording should explain how to record: " + hint);
+			check(hint.equals("toast streamerreplay.toast.not_recording.rejoin"), "switching recording on mid-session should explain when it starts: " + hint);
 			ctx.takeScreenshot("02b_not_recording_hint");
 		}
 		// leaving the world stops and saves the recording in the background
@@ -222,6 +230,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.takeScreenshot("06_after_seek_forward");
 		long seekStart = System.nanoTime();
 		ctx.runOnClient(mc -> ReplayManager.session().seek(duration * 0.2));
+		ctx.waitTicks(2);
+		ctx.takeScreenshot("06b_rewinding_keeps_last_picture");
 		waitCaughtUp(ctx);
 		StreamerReplay.LOGGER.info("[gametest] backward seek 70% -> 20% (world rebuild) took {} ms", (System.nanoTime() - seekStart) / 1_000_000);
 		seekStart = System.nanoTime();
@@ -313,6 +323,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		}
 
 		nativeResolutionExport(ctx);
+		verticalExport(ctx);
 		cleanFramesExport(ctx, b);
 		noFfmpegNoPathExport(ctx);
 
@@ -671,6 +682,20 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		int[] after = ctx.computeOnClient(mc -> new int[] {mc.gameRenderer.mainRenderTarget().width, mc.getWindow().getWidth(), mc.getWindow().getGuiScaledWidth()});
 		StreamerReplay.LOGGER.info("[gametest] after export: target {} window {} gui {}", after[0], after[1], after[2]);
 		check(after[0] == 854 && after[1] == 854, "rendering should return to the window size after the export");
+	}
+
+	/** 9:16 for Shorts: a native 1080×1920 video, previewed upright (letterboxed) in the 16:9 window. */
+	private static void verticalExport(ClientGameTestContext ctx) {
+		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Vertical 9x16.mp4"));
+		String result = export(ctx, new ExportSettings(video, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 1080, 1920, true), () -> {
+			ctx.waitFor(mc -> VideoExporter.current().framesDone() >= 5, 20 * 120);
+			ctx.takeScreenshot("10c_vertical_export_preview");
+		});
+		StreamerReplay.LOGGER.info("[gametest] vertical export: {}", result);
+		check(result.startsWith("DONE"), "vertical export failed: " + result);
+		String probe = ffprobe(video);
+		StreamerReplay.LOGGER.info("[gametest] ffprobe vertical: {}", probe);
+		check(probe.startsWith("h264,1080,1920"), "video should be native 1080x1920 H.264: " + probe);
 	}
 
 	/**

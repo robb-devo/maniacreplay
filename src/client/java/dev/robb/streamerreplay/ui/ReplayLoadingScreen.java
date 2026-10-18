@@ -33,6 +33,10 @@ public final class ReplayLoadingScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
+		if (RewindOverlay.isShown()) {
+			RewindOverlay.draw(g, width, height, session.catchUpProgress()); // rewinding: keep the last picture
+			return;
+		}
 		super.extractRenderState(g, mouseX, mouseY, a);
 		g.centeredText(font, title, width / 2, height / 2 - 30, Theme.TEXT);
 		g.centeredText(font, Component.literal(session.meta().worldName == null ? "" : session.meta().worldName), width / 2, height / 2 - 16, Theme.TEXT_DIM);

@@ -12,7 +12,7 @@ import java.nio.file.Path;
 /** Shared constants and paths. */
 public final class StreamerReplay {
 	public static final String MOD_ID = "streamerreplay";
-	public static final Logger LOGGER = LoggerFactory.getLogger("Streamer Replay");
+	public static final Logger LOGGER = LoggerFactory.getLogger("ManiacReplay");
 
 	private StreamerReplay() {
 	}

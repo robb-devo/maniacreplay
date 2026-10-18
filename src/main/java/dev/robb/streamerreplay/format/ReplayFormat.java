@@ -11,7 +11,8 @@ import java.nio.charset.StandardCharsets;
  *     <li>{@value #ENTRY_PACKETS}: the packet stream (stored, already deflate-compressed, see below)</li>
  *     <li>{@value #ENTRY_MARKERS}: user markers as JSON</li>
  *     <li>{@value #ENTRY_THUMBNAIL}: optional PNG preview image</li>
- *     <li>{@value #ENTRY_PATHS}: optional camera path as JSON</li>
+ *     <li>{@value #ENTRY_PATHS}: camera path as JSON (only in replays from 1.1.x; newer versions keep the path in a
+ *     {@value #PATHS_SIDECAR_EXTENSION} file next to the replay, so the large archive is never rewritten)</li>
  * </ul>
  *
  * <p>The packet stream starts with {@link #STREAM_MAGIC} followed by a zlib (deflate) stream of frames.
@@ -26,6 +27,8 @@ public final class ReplayFormat {
 	public static final String MARKERS_SIDECAR_EXTENSION = ".sreplay.markers";
 	public static final String THUMB_SIDECAR_EXTENSION = ".sreplay.thumb";
 	public static final String META_SIDECAR_EXTENSION = ".sreplay.meta";
+	/** Appended to the full replay file name: {@code name.sreplay.paths}. */
+	public static final String PATHS_SIDECAR_EXTENSION = ".paths";
 
 	public static final String ENTRY_META = "meta.json";
 	public static final String ENTRY_PACKETS = "packets.z";

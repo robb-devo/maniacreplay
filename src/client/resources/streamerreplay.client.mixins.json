@@ -13,6 +13,7 @@
 		"EntityRendererMixin",
 		"GameRendererMixin",
 		"LevelExtractorMixin",
+		"LevelLoadingScreenMixin",
 		"MinecraftMixin",
 		"TextureManagerMixin",
 		"ToastManagerMixin"

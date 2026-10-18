@@ -1,8 +1,13 @@
 package dev.robb.streamerreplay.replay;
 
-import dev.robb.streamerreplay.input.ReplayKeys;
-import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.StreamerReplay;
+import dev.robb.streamerreplay.config.ReplayConfig;
+import dev.robb.streamerreplay.input.ReplayKeys;
+import dev.robb.streamerreplay.library.ReplayLibrary;
+import dev.robb.streamerreplay.record.RecordingManager;
+import dev.robb.streamerreplay.render.VideoExporter;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
+import dev.robb.streamerreplay.ui.RewindOverlay;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.PacketStreamReader;
 import dev.robb.streamerreplay.format.ReplayArchive;
@@ -28,9 +33,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.zip.ZipFile;
 
 /**
@@ -38,7 +41,9 @@ import java.util.zip.ZipFile;
  * rendered frame from {@link ReplayManager#onFrame()}.
  *
  * <p>Seeking forward delivers packets as fast as a per-frame time budget allows. Seeking backwards is not
- * possible with a packet stream, so the world is rebuilt from the start and fast-forwarded to the target.
+ * possible with a packet stream, so the world is rebuilt from the start and fast-forwarded to the target. The
+ * {@link RewindOverlay} keeps the last picture on screen meanwhile, and repeated ±5 s presses are bundled into one
+ * rebuild.
  */
 public final class ReplaySession {
 	/**
@@ -48,6 +53,8 @@ public final class ReplaySession {
 	 */
 	private static final long FAST_FORWARD_BUDGET_NANOS = 25_000_000L;
 	private static final long CATCH_UP_THRESHOLD_MS = 1500;
+	/** ±5 s presses within this time become one jump, so pressing back three times rebuilds the world once. */
+	private static final long NUDGE_SETTLE_NANOS = 300_000_000L;
 
 	private final Path file;
 	private final ZipFile zip;
@@ -63,7 +70,7 @@ public final class ReplaySession {
 	private PacketStreamReader reader;
 	private boolean hasFrame;
 	private long deliveredUntil;
-	private boolean pathDirty;
+	private long rewindNotBefore;
 	private boolean closed;
 	private boolean restarting;
 	private @Nullable CameraState restorePose;
@@ -110,18 +117,15 @@ public final class ReplaySession {
 		}
 	}
 
-	private Path pathSidecar() {
-		return file.resolveSibling(file.getFileName() + ".paths");
-	}
-
+	/** The camera path lives next to the replay, so editing it never rewrites the (large) replay file. */
 	private void loadPath() {
 		try {
 			String json = null;
-			if (Files.exists(pathSidecar())) {
-				json = Files.readString(pathSidecar()); // unsaved edits from a crashed session
-				pathDirty = true;
+			Path sidecar = ReplayLibrary.pathsSidecar(file);
+			if (Files.exists(sidecar)) {
+				json = Files.readString(sidecar);
 			} else {
-				byte[] stored = ReplayArchive.readEntry(zip, ReplayFormat.ENTRY_PATHS);
+				byte[] stored = ReplayArchive.readEntry(zip, ReplayFormat.ENTRY_PATHS); // replays from 1.1.x
 				if (stored != null) {
 					json = new String(stored, StandardCharsets.UTF_8);
 				}
@@ -145,7 +149,7 @@ public final class ReplaySession {
 		deliveredUntil = 0;
 		ticksDone = 0;
 		lastTicks = 0;
-		filter = new ReplayPacketFilter();
+		filter = new ReplayPacketFilter(ReplayConfig.get().showChatInReplay);
 		channel = new ReplayChannel(filter);
 		ClientHandshakePacketListenerImpl listener = new ClientHandshakePacketListenerImpl(
 			channel.connection(), mc, null, parent, false, null, status -> {
@@ -182,13 +186,17 @@ public final class ReplaySession {
 				clock.setTime(reader.time());
 			}
 		}
-		if (isInWorld(mc) && clock.timeMs() < deliveredUntil - 1) {
+		if (isInWorld(mc) && rewindPending() && System.nanoTime() >= rewindNotBefore
+			&& (VideoExporter.isExporting() || RewindOverlay.prepare())) {
 			restart();
 			return;
 		}
 		deliver((long) Math.floor(clock.timeMs()), pathPlayer != null && pathPlayer.isExact() && !pathPlayer.isWaitingForSeek());
 		if (worldVisible) {
 			enforceSpectator(mc);
+			if (RewindOverlay.isShown() && isCaughtUp(mc) && mc.levelRenderer.hasRenderedAllSections()) {
+				RewindOverlay.clear(); // the world at the new time is complete
+			}
 			if (restorePose != null) {
 				camera.setPose(restorePose);
 				camera.moveToPose(restorePose);
@@ -330,10 +338,15 @@ public final class ReplaySession {
 		return hasFrame && reader.time() < clock.timeMs() - CATCH_UP_THRESHOLD_MS;
 	}
 
+	/** The clock is before what was already delivered: the world has to be rebuilt (it may wait a moment for that). */
+	private boolean rewindPending() {
+		return clock.timeMs() < deliveredUntil - 1;
+	}
+
 	/** True when everything up to the current time was delivered and the world is visible. */
 	public boolean isCaughtUp(Minecraft mc) {
 		return isInWorld(mc) && !(mc.gui.screen() instanceof LevelLoadingScreen) && !channel.awaitingProtocolSwitch()
-			&& (!hasFrame || reader.time() > clock.timeMs());
+			&& !rewindPending() && (!hasFrame || reader.time() > clock.timeMs());
 	}
 
 	/** 0..1 progress of a running fast-forward, or 1 if not seeking. */
@@ -391,6 +404,12 @@ public final class ReplaySession {
 		clock.setTime(timeMs);
 	}
 
+	/** Relative jump for the ±5 s keys and buttons; presses in quick succession are rebuilt as one jump. */
+	public void nudge(double deltaMs) {
+		seek(clock.timeMs() + deltaMs);
+		rewindNotBefore = System.nanoTime() + NUDGE_SETTLE_NANOS;
+	}
+
 	/** Starts playing the camera path in real time (preview). */
 	public void playPath() {
 		if (!path.isPlayable()) {
@@ -399,11 +418,6 @@ public final class ReplaySession {
 		clock.setPlaying(false);
 		pathPlayer = new PathPlayer(path, false);
 		pathPlayer.begin(this);
-	}
-
-	/** Starts deterministic path playback driven by an external frame clock (video export). */
-	public PathPlayer playPathForExport() {
-		return playPathForExport(path);
 	}
 
 	/** Deterministic playback of {@code exportPath} (the session's path, or a fixed shot without keyframes). */
@@ -476,14 +490,17 @@ public final class ReplaySession {
 		camera.moveToPose(keyframe.camera()); // survives a world rebuild via restorePose
 	}
 
-	/** Marks the camera path as edited; it is autosaved next to the replay and merged into it on exit. */
+	/** Saves the camera path next to the replay, in the background and in edit order. */
 	public void markPathChanged() {
-		pathDirty = true;
-		try {
-			Files.writeString(pathSidecar(), CameraPathJson.write(ReplayArchive.GSON, path));
-		} catch (IOException e) {
-			StreamerReplay.LOGGER.warn("Could not autosave camera path", e);
-		}
+		String json = CameraPathJson.write(ReplayArchive.GSON, path);
+		Path sidecar = ReplayLibrary.pathsSidecar(file);
+		RecordingManager.saver().execute(() -> {
+			try {
+				Files.writeString(sidecar, json);
+			} catch (IOException e) {
+				StreamerReplay.LOGGER.warn("Could not save the camera path of {}", file.getFileName(), e);
+			}
+		});
 	}
 
 	/** Releases files. Must be called after the world was left. */
@@ -493,6 +510,7 @@ public final class ReplaySession {
 		}
 		closed = true;
 		pathPlayer = null;
+		RewindOverlay.clear();
 		if (channel != null) {
 			channel.close();
 		}
@@ -503,20 +521,6 @@ public final class ReplaySession {
 			zip.close();
 		} catch (IOException e) {
 			StreamerReplay.LOGGER.warn("Error closing replay", e);
-		}
-		if (pathDirty) {
-			savePathIntoArchive();
-		}
-	}
-
-	private void savePathIntoArchive() {
-		try {
-			Map<String, byte[]> entries = new HashMap<>();
-			entries.put(ReplayFormat.ENTRY_PATHS, path.isEmpty() ? null : CameraPathJson.write(ReplayArchive.GSON, path).getBytes(StandardCharsets.UTF_8));
-			ReplayArchive.updateEntries(file, entries);
-			Files.deleteIfExists(pathSidecar());
-		} catch (IOException e) {
-			StreamerReplay.LOGGER.warn("Could not save camera path into {}; it stays in the sidecar file", file.getFileName(), e);
 		}
 	}
 

@@ -1,7 +1,9 @@
 package dev.robb.streamerreplay.ui.browser;
 
-import dev.robb.streamerreplay.ui.GameLocale;
+import dev.robb.streamerreplay.config.ReplayConfig;
+import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.ReplayMeta;
+import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.library.ReplayInfo;
 import dev.robb.streamerreplay.ui.Theme;
 import dev.robb.streamerreplay.util.TimeFormat;
@@ -17,23 +19,26 @@ import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.ObjLongConsumer;
 
-/** Scrollable list of replays with thumbnail, name and the most useful facts. */
+/** Scrollable list of replays with thumbnail, name, the most useful facts and clickable markers. */
 public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserList.Entry> {
 	static final int THUMB_W = 64;
 	static final int THUMB_H = 36;
+	/** A marker is set after the moment happened ("that was great"), so watching starts a little earlier. */
+	public static final long MARKER_PREROLL_MS = 10_000;
 
 	private ThumbnailCache thumbnails = new ThumbnailCache();
 	private final Consumer<ReplayInfo> onOpen;
+	private final ObjLongConsumer<ReplayInfo> onOpenAt;
 
-	public ReplayBrowserList(Minecraft minecraft, int width, int height, int y, Consumer<ReplayInfo> onOpen) {
+	public ReplayBrowserList(Minecraft minecraft, int width, int height, int y, Consumer<ReplayInfo> onOpen, ObjLongConsumer<ReplayInfo> onOpenAt) {
 		super(minecraft, width, height, y, THUMB_H + 8);
 		this.onOpen = onOpen;
+		this.onOpenAt = onOpenAt;
 	}
 
 	public @Nullable ReplayInfo selectedInfo() {
@@ -76,11 +81,20 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 	}
 
 	private static final Component UNREADABLE = Component.translatable("streamerreplay.browser.unreadable");
+	private static final int CHIP_HEIGHT = 11;
+
+	/** Where a marker chip was drawn in the last frame, for clicks. */
+	private record Chip(int x0, int x1, int y0, Marker marker) {
+		boolean contains(double x, double y) {
+			return x >= x0 && x < x1 && y >= y0 && y < y0 + CHIP_HEIGHT;
+		}
+	}
 
 	final class Entry extends ObjectSelectionList.Entry<Entry> {
 		final ReplayInfo info;
 		private final String subtitle;
 		private final String details;
+		private final List<Chip> chips = new ArrayList<>();
 
 		Entry(ReplayInfo info) {
 			this.info = info;
@@ -92,7 +106,6 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 				String date = GameLocale.dateFormat().format(Instant.ofEpochMilli(meta.recordedAt > 0 ? meta.recordedAt : info.modifiedMs()));
 				subtitle = date + "  \u00B7  " + TimeFormat.clock(meta.durationMs) + (meta.worldName.isEmpty() ? "" : "  \u00B7  " + meta.worldName);
 				details = GameLocale.bytes(info.sizeBytes())
-					+ (info.markers() > 0 ? "  \u00B7  " + Component.translatable("streamerreplay.browser.markers", info.markers()).getString() : "")
 					+ "  \u00B7  " + Component.translatable(meta.singleplayer ? "streamerreplay.browser.singleplayer" : "streamerreplay.browser.multiplayer").getString()
 					+ "  \u00B7  " + meta.minecraftVersion;
 			}
@@ -122,17 +135,54 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 				return;
 			}
 			g.text(font, font.plainSubstrByWidth(subtitle, maxWidth), tx, y + 13, Theme.TEXT_DIM, false);
-			String line = details;
-			int color = Theme.TEXT_FAINT;
-			g.text(font, font.plainSubstrByWidth(line, maxWidth), tx, y + 25, color, false);
-			if (info.meta().recovered) {
-				Component recovered = Component.translatable("streamerreplay.browser.recovered");
-				g.text(font, recovered, getContentRight() - font.width(recovered), y + 1, Theme.MARKER, false);
+			int detailsX = drawChips(g, font, tx, y + 24, getContentRight(), mouseX, mouseY);
+			if (detailsX < getContentRight() - 30) {
+				g.text(font, font.plainSubstrByWidth(details, getContentRight() - detailsX), detailsX, y + 25, Theme.TEXT_FAINT, false);
 			}
+			Component badge = info.meta().recovered ? Component.translatable("streamerreplay.browser.recovered")
+				: ReplayConfig.get().cleanupAfterDays() > 0 && info.kept() ? Component.translatable("streamerreplay.browser.kept") : null;
+			if (badge != null) {
+				g.text(font, badge, getContentRight() - font.width(badge), y + 1, Theme.MARKER, false);
+			}
+		}
+
+		/** One chip per marker ("\u2691 12:34"), as many as fit; returns where the rest of the line can start. */
+		private int drawChips(GuiGraphicsExtractor g, Font font, int x, int y, int right, int mouseX, int mouseY) {
+			chips.clear();
+			List<Marker> markers = info.markerList();
+			for (int i = 0; i < markers.size(); i++) {
+				Marker marker = markers.get(i);
+				String label = "\u2691 " + TimeFormat.clock(marker.timeMs());
+				int w = font.width(label) + 6;
+				int more = markers.size() - i - 1;
+				int reserve = more > 0 ? font.width("+" + more) + 4 : 0;
+				if (x + w + reserve > right) {
+					String rest = "+" + (markers.size() - i);
+					g.text(font, rest, x, y + 2, Theme.MARKER, false);
+					return x + font.width(rest) + 8;
+				}
+				Chip chip = new Chip(x, x + w, y, marker);
+				boolean hovered = chip.contains(mouseX, mouseY);
+				g.fill(x, y, x + w, y + CHIP_HEIGHT, Theme.withAlpha(Theme.MARKER, hovered ? 0.45F : 0.16F));
+				g.text(font, label, x + 3, y + 2, hovered ? Theme.TEXT : Theme.MARKER, false);
+				if (hovered) {
+					g.setTooltipForNextFrame(Component.translatable("streamerreplay.browser.marker_chip", marker.name(),
+						TimeFormat.clock(Math.max(0, marker.timeMs() - MARKER_PREROLL_MS))), mouseX, mouseY);
+				}
+				chips.add(chip);
+				x += w + 3;
+			}
+			return markers.isEmpty() ? x : x + 5;
 		}
 
 		@Override
 		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+			for (Chip chip : chips) {
+				if (chip.contains(event.x(), event.y()) && info.readable()) {
+					onOpenAt.accept(info, Math.max(0, chip.marker().timeMs() - MARKER_PREROLL_MS));
+					return true;
+				}
+			}
 			boolean onThumb = event.x() >= getContentX() && event.x() < getContentX() + THUMB_W;
 			if ((doubleClick || onThumb) && info.readable()) {
 				onOpen.accept(info);

@@ -47,6 +47,8 @@ public final class Recorder {
 	private long lastFlush = System.nanoTime();
 	private volatile byte[] thumbnail; // set from the screenshot worker thread
 	private boolean thumbnailRequested;
+	/** Orders sidecar writes from other threads against {@link #finish()} deleting the sidecars. */
+	private final Object sidecarLock = new Object();
 
 	Recorder(Channel channel, RecordingTap tap, ReplayMeta meta, Path recordingFile, Path targetFile) throws IOException {
 		this.channel = channel;
@@ -140,6 +142,11 @@ public final class Recorder {
 		return writer.failure();
 	}
 
+	/** The disk could not keep up; the recording should be stopped and saved. */
+	boolean overflowed() {
+		return writer.overflowed();
+	}
+
 	public int elapsedMs() {
 		return clock.now();
 	}
@@ -154,8 +161,13 @@ public final class Recorder {
 	}
 
 	void setThumbnail(byte[] png) {
-		this.thumbnail = png;
-		writeSidecar(ReplayFormat.THUMB_SIDECAR_EXTENSION, png);
+		synchronized (sidecarLock) {
+			if (stopped) {
+				return; // finish() already packaged the replay; a late sidecar would be left behind
+			}
+			this.thumbnail = png;
+			writeSidecar(ReplayFormat.THUMB_SIDECAR_EXTENSION, png);
+		}
 	}
 
 	Marker addMarker(String name) {
@@ -209,7 +221,9 @@ public final class Recorder {
 	 * @return the saved replay or {@code null} if the session was too short to be useful and got discarded
 	 */
 	Path finish() throws IOException {
-		stopped = true;
+		synchronized (sidecarLock) {
+			stopped = true;
+		}
 		tap.attach(null);
 		int duration = clock.now();
 		try {

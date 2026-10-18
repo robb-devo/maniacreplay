@@ -138,7 +138,7 @@ public final class CameraPath {
 		version++;
 	}
 
-	/** Index of the keyframe whose path time is closest to the given one, or -1 if empty. */
+	/** Index of the keyframe whose replay time is closest to the given one, or -1 if empty. */
 	public int nearestByReplayTime(long replayTimeMs) {
 		int best = -1;
 		long bestDistance = Long.MAX_VALUE;

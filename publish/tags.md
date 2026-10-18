@@ -1,7 +1,7 @@
 # Listing metadata
 
 - Name: ManiacReplay
-- Slug suggestion: streamer-replay
+- Slug suggestion: maniacreplay
 - Summary: see summary.txt (Modrinth max 256 characters; this one is 124)
 - License: MIT
 - Environment: client required, server unsupported/not needed
@@ -19,4 +19,4 @@ minigame, mobs, optimization, social, storage, technology, transportation, utili
 Suggested: `Utility & QoL`, `Miscellaneous`.
 
 ## Keywords
-replay, recording, camera, cinematic, video, export, streamer, ffmpeg, timeline, spectator, 4k, shaders, iris
+replay, recording, camera, cinematic, video, export, streamer, ffmpeg, timeline, spectator, 4k, shorts, tiktok, shaders, iris
