@@ -131,6 +131,13 @@ if (project.hasProperty("shaderPack")) {
 	}
 }
 
+// Graphics backend: ./gradlew runClientGameTest -PgraphicsApi=vulkan (or opengl), using Minecraft's own launch argument.
+tasks.matching { it.name == "runClientGameTest" }.configureEach {
+	if (project.hasProperty("graphicsApi")) {
+		args("--graphicsBackend", project.property("graphicsApi").toString())
+	}
+}
+
 // Crash-recovery test (scripts/crash-recovery-test.sh): phase "crash" records in a fresh run directory until the
 // script kills the JVM with SIGKILL; phase "recover" starts again on the same directory and checks the recovery.
 if (project.hasProperty("crashPhase")) {

@@ -1,6 +1,8 @@
 package dev.robb.streamerreplay.gametest;
 
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.systems.RenderSystem;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.ReplayFormat;
@@ -10,6 +12,7 @@ import dev.robb.streamerreplay.path.CameraState;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.render.ExportSettings;
 import dev.robb.streamerreplay.render.PathPreviewRenderer;
+import dev.robb.streamerreplay.render.RenderResolution;
 import dev.robb.streamerreplay.render.VideoExporter;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
@@ -29,6 +32,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.components.AbstractButton;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -53,6 +57,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -165,6 +170,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			return sb.toString();
 		});
 		StreamerReplay.LOGGER.info("[gametest] key conflicts: {}", conflicts.isEmpty() ? "none" : conflicts);
+		String backend = ctx.computeOnClient(mc -> RenderSystem.getDevice().getDeviceInfo().backendName());
+		StreamerReplay.LOGGER.info("[gametest] graphics backend: {}", backend);
 		check(conflicts.isEmpty(), "default keys conflict: " + conflicts);
 		switchLanguage(ctx, LANGUAGE);
 		ctx.takeScreenshot("01_title_screen");
@@ -736,6 +743,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	 * a native 1920×1080 file, and the window must return to normal rendering afterwards.
 	 */
 	private static void nativeResolutionExport(ClientGameTestContext ctx) {
+		// On Vulkan, Minecraft 26.3 loses the device when the test resizes the window, even on the title screen with no
+		// replay open; so the window keeps its size there and the letterbox check runs on OpenGL only.
+		boolean resizable = !ctx.computeOnClient(mc -> RenderSystem.getDevice().getDeviceInfo().backendName().toLowerCase(Locale.ROOT).contains("vulkan"));
 		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Native 1080p.mp4"));
 		String result = export(ctx, new ExportSettings(video, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 1920, 1080, true), () -> {
 			int rendering = ctx.computeOnClient(mc -> mc.gameRenderer.mainRenderTarget().width);
@@ -746,8 +756,13 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			// The harness screenshot renders one extra frame at window size with the 1080p GUI layout (so it looks
 			// cropped); it is not a gallery shot, it proves such foreign renders do not break the export.
 			ctx.takeScreenshot("zz_harness_extra_render_during_1080p_export");
-			ctx.getInput().resizeWindow(700, 520);
-			ctx.waitTicks(20);
+			if (resizable) {
+				ctx.getInput().resizeWindow(700, 520);
+				ctx.waitTicks(20);
+				checkPreview(ctx, "1080p in 700x520", 1920, 1080); // bars above and below
+			} else {
+				checkPreview(ctx, "1080p in 854x480", 1920, 1080); // same shape: fills the window
+			}
 		});
 		StreamerReplay.LOGGER.info("[gametest] 1080p export (window resized mid-way): {}", result);
 		check(result.startsWith("DONE"), "1080p export failed: " + result);
@@ -767,8 +782,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		float sky = ctx.computeOnClient(mc -> mc.gameRenderer.mainCamera().attributeProbe()
 			.getValue(EnvironmentAttributes.SKY_COLOR, 0).length());
 		check(sky > 0.1f, "the sky colour must be known again after the export's world rebuild");
-		ctx.getInput().resizeWindow(854, 480);
-		ctx.waitTicks(20);
+		if (resizable) {
+			ctx.getInput().resizeWindow(854, 480);
+			ctx.waitTicks(20);
+		}
 		int[] after = ctx.computeOnClient(mc -> new int[] {mc.gameRenderer.mainRenderTarget().width, mc.getWindow().getWidth(), mc.getWindow().getGuiScaledWidth()});
 		StreamerReplay.LOGGER.info("[gametest] after export: target {} window {} gui {}", after[0], after[1], after[2]);
 		check(after[0] == 854 && after[1] == 854, "rendering should return to the window size after the export");
@@ -779,13 +796,16 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		Path video = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Vertical 9x16.mp4"));
 		String result = export(ctx, new ExportSettings(video, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 1080, 1920, true), () -> {
 			ctx.waitFor(mc -> VideoExporter.current().framesDone() >= 5, 20 * 120);
-			ctx.takeScreenshot("10c_vertical_export_preview");
+			checkPreview(ctx, "1080x1920 in 854x480", 1080, 1920); // bars left and right
 		});
 		StreamerReplay.LOGGER.info("[gametest] vertical export: {}", result);
 		check(result.startsWith("DONE"), "vertical export failed: " + result);
 		String probe = ffprobe(video);
 		StreamerReplay.LOGGER.info("[gametest] ffprobe vertical: {}", probe);
 		check(probe.startsWith("h264,1080,1920"), "video should be native 1080x1920 H.264: " + probe);
+		int[] filled = contentBounds(frame(video, "1", ""));
+		StreamerReplay.LOGGER.info("[gametest] vertical video frame content: {},{} to {},{}", filled[0], filled[1], filled[2], filled[3]);
+		check(filled[0] <= 2 && filled[1] <= 2 && filled[2] >= 1077 && filled[3] >= 1917, "the vertical video itself must be filled edge to edge");
 	}
 
 	/**
@@ -1004,6 +1024,68 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.getInput().setCursorPos(pos[0], pos[1]);
 		ctx.waitTicks(1);
 		ctx.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
+	}
+
+	/**
+	 * Reads the picture the window shows during a running export (what RenderResolution hands to the screen) and
+	 * checks that the export image sits upright and centred where {@link RenderResolution#fit} puts it.
+	 */
+	private static void checkPreview(ClientGameTestContext ctx, String name, int exportWidth, int exportHeight) {
+		Path file = ctx.computeOnClient(mc -> mc.gameDirectory.toPath().resolve("preview " + name + ".png"));
+		int[] window = ctx.computeOnClient(mc -> {
+			var size = mc.getWindow().queryFramebufferSize();
+			return new int[] {size.width(), size.height()};
+		});
+		ctx.runOnClient(mc -> {
+			try {
+				var field = RenderResolution.class.getDeclaredField("presentTarget");
+				field.setAccessible(true);
+				var target = (RenderTarget) field.get(null);
+				Screenshot.takeScreenshot(target, image -> {
+					try (image) {
+						image.writeToFile(file);
+					} catch (IOException e) {
+						throw new UncheckedIOException(e);
+					}
+				});
+			} catch (ReflectiveOperationException e) {
+				throw new AssertionError(e);
+			}
+		});
+		ctx.waitTicks(10);
+		BufferedImage picture;
+		try {
+			picture = ImageIO.read(file.toFile());
+		} catch (IOException e) {
+			throw new AssertionError(e);
+		}
+		var expected = RenderResolution.fit(exportWidth, exportHeight, window[0], window[1]);
+		int[] box = contentBounds(picture);
+		String found = box[0] + "," + box[1] + " " + (box[2] - box[0] + 1) + "x" + (box[3] - box[1] + 1);
+		StreamerReplay.LOGGER.info("[gametest] preview {}: picture at {}, expected {},{} {}x{}", name, found,
+			expected.x(), expected.y(), expected.width(), expected.height());
+		check(Math.abs(box[0] - expected.x()) <= 3 && Math.abs(box[1] - expected.y()) <= 3
+			&& Math.abs(box[2] - box[0] + 1 - expected.width()) <= 4 && Math.abs(box[3] - box[1] + 1 - expected.height()) <= 4,
+			"the export preview (" + name + ") should show the picture at " + expected + " but it is at " + found);
+	}
+
+	/** The smallest rectangle {x0, y0, x1, y1} that contains every pixel brighter than near-black. */
+	private static int[] contentBounds(BufferedImage image) {
+		int x0 = image.getWidth();
+		int y0 = image.getHeight();
+		int x1 = -1;
+		int y1 = -1;
+		for (int y = 0; y < image.getHeight(); y++) {
+			for (int x = 0; x < image.getWidth(); x++) {
+				if (luma(image.getRGB(x, y)) > 12) {
+					x0 = Math.min(x0, x);
+					y0 = Math.min(y0, y);
+					x1 = Math.max(x1, x);
+					y1 = Math.max(y1, y);
+				}
+			}
+		}
+		return new int[] {x0, y0, x1, y1};
 	}
 
 	private static void check(boolean condition, String message) {
