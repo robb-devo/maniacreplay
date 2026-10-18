@@ -3,6 +3,18 @@
 All notable changes. Versions follow [Semantic Versioning](https://semver.org/); every release targets
 Minecraft 26.3 with Fabric.
 
+## 1.2.3
+
+### Fixed
+- The German settings screen still showed the old name in its title ("Streamer-Replay-Einstellungen"). It now reads
+  "ManiacReplay-Einstellungen".
+
+### Tests
+- The translation test checks that every German text keeps the mod name wherever the English one has it.
+
+**SHA-256** of `maniacreplay-1.2.3.jar`:
+`95722b1738e1df5874a64245b9261d12650a3d2dfe417c036f4efdc248749b7c`
+
 ## 1.2.2
 
 ### Fixed
