@@ -4,18 +4,18 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.Marker;
-import dev.robb.streamerreplay.ui.browser.ReplayBrowserList;
-import dev.robb.streamerreplay.ui.hud.ReplayHud;
-import java.util.List;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.replay.EntityPicker;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.ReplayEditorScreen;
+import dev.robb.streamerreplay.ui.hud.ReplayHud;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
 
 /** All key bindings of the mod, in their own category in the vanilla controls screen. */
 public final class ReplayKeys {
@@ -98,28 +98,25 @@ public final class ReplayKeys {
 		Marker target = null;
 		if (direction > 0) {
 			for (Marker marker : markers) {
-				if (markerStart(marker) > now + 500) {
+				if (marker.startMs() > now + 500) {
 					target = marker;
 					break;
 				}
 			}
 		} else {
 			for (int i = markers.size() - 1; i >= 0; i--) {
-				if (markerStart(markers.get(i)) < now - 1500) { // a little slack, so pressing again goes further back
+				if (markers.get(i).startMs() < now - 1500) { // a little slack, so pressing again goes further back
 					target = markers.get(i);
 					break;
 				}
 			}
 		}
 		if (target != null) {
-			session.seek(markerStart(target));
+			session.seek(target.startMs());
 			ReplayHud.showMarker(target);
 		}
 	}
 
-	private static long markerStart(Marker marker) {
-		return Math.max(0, marker.timeMs() - ReplayBrowserList.MARKER_PREROLL_MS);
-	}
 
 	/** Play/pause; while a camera path preview runs it stops the preview instead. */
 	public static void togglePlayback(ReplaySession session) {

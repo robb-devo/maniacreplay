@@ -1,12 +1,13 @@
 package dev.robb.streamerreplay.render;
 
 import dev.robb.streamerreplay.util.FfmpegLocator;
+import net.fabricmc.loader.api.FabricLoader;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import net.fabricmc.loader.api.FabricLoader;
 
 /** Checks asynchronously whether ffmpeg can be started and which H.264 encoder it offers. */
 public final class FfmpegProbe {

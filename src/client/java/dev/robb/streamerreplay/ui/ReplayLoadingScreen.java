@@ -10,7 +10,11 @@ import net.minecraft.network.chat.Component;
 
 /** Shown while the replay connection is in login/configuration, i.e. before vanilla's level loading screen. */
 public final class ReplayLoadingScreen extends Screen {
+	/** A rewind normally finishes quickly; Cancel appears only when it takes longer than this. */
+	private static final long CANCEL_AFTER_MS = 3000;
+
 	private final ReplaySession session;
+	private Button cancel;
 
 	public ReplayLoadingScreen(ReplaySession session) {
 		super(Component.translatable("streamerreplay.loading.title"));
@@ -19,7 +23,7 @@ public final class ReplayLoadingScreen extends Screen {
 
 	@Override
 	protected void init() {
-		addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> ReplayManager.exit())
+		cancel = addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, b -> ReplayManager.exit())
 			.bounds(width / 2 - 75, height / 2 + 30, 150, 20).build());
 	}
 
@@ -33,8 +37,11 @@ public final class ReplayLoadingScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float a) {
-		if (RewindOverlay.isShown()) {
-			RewindOverlay.draw(g, width, height, session.catchUpProgress()); // rewinding: keep the last picture
+		boolean rewinding = RewindOverlay.isShown();
+		cancel.visible = !rewinding || RewindOverlay.shownForMs() > CANCEL_AFTER_MS;
+		if (rewinding) {
+			RewindOverlay.draw(g, width, height, session.catchUpProgress()); // keep the last picture while the world is rebuilt
+			super.extractRenderState(g, mouseX, mouseY, a);
 			return;
 		}
 		super.extractRenderState(g, mouseX, mouseY, a);

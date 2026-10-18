@@ -1,31 +1,69 @@
 package dev.robb.streamerreplay.gametest;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.ReplayFormat;
+import dev.robb.streamerreplay.library.ReplayInfo;
+import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.path.CameraState;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.render.ExportSettings;
+import dev.robb.streamerreplay.render.PathPreviewRenderer;
 import dev.robb.streamerreplay.render.VideoExporter;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
+import dev.robb.streamerreplay.ui.ExportProgressScreen;
 import dev.robb.streamerreplay.ui.ExportScreen;
+import dev.robb.streamerreplay.ui.FfmpegHelpScreen;
+import dev.robb.streamerreplay.ui.Notifications;
+import dev.robb.streamerreplay.ui.RenameReplayScreen;
 import dev.robb.streamerreplay.ui.ReplayBrowserScreen;
 import dev.robb.streamerreplay.ui.ReplayConfigScreen;
 import dev.robb.streamerreplay.ui.ReplayEditorScreen;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
-import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
+import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractButton;
+import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.debug.DebugScreenEntries;
+import net.minecraft.client.gui.components.debug.DebugScreenEntryStatus;
+import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.gui.components.toasts.Toast;
+import net.minecraft.client.gui.components.toasts.TutorialToast;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.util.Mth;
+import net.minecraft.world.attribute.EnvironmentAttributes;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
+import javax.imageio.ImageIO;
 
 /**
  * End-to-end test: record a singleplayer session, open it in the browser, watch it, seek, build a camera path
@@ -42,7 +80,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		if (code.equals(ctx.computeOnClient(mc -> mc.getLanguageManager().getSelected()))) {
 			return;
 		}
-		java.util.concurrent.CompletableFuture<Void> reload = ctx.computeOnClient(mc -> {
+		CompletableFuture<Void> reload = ctx.computeOnClient(mc -> {
 			mc.getLanguageManager().setSelected(code);
 			mc.options.languageCode = code;
 			return mc.reloadResourcePacks();
@@ -50,7 +88,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitFor(mc -> reload.isDone(), 20 * 120);
 		ctx.waitForScreen(TitleScreen.class);
 		ctx.waitTicks(20);
-		String sample = ctx.computeOnClient(mc -> net.minecraft.network.chat.Component.translatable("streamerreplay.browser.watch").getString());
+		String sample = ctx.computeOnClient(mc -> Component.translatable("streamerreplay.browser.watch").getString());
 		StreamerReplay.LOGGER.info("[gametest] language {} active, sample label: {}", code, sample);
 	}
 
@@ -61,7 +99,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	private static void checkLabelsFit(ClientGameTestContext ctx, String where) {
 		String problems = ctx.computeOnClient(mc -> {
 			StringBuilder sb = new StringBuilder();
-			var all = net.fabricmc.fabric.api.client.screen.v1.Screens.getWidgets(mc.gui.screen());
+			var all = Screens.getWidgets(mc.gui.screen());
 			for (int i = 0; i < all.size(); i++) {
 				for (int j = i + 1; j < all.size(); j++) {
 					var a = all.get(i);
@@ -73,8 +111,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				}
 			}
 			for (var widget : all) {
-				if (widget instanceof net.minecraft.client.gui.components.AbstractButton
-					|| widget instanceof net.minecraft.client.gui.components.AbstractSliderButton) {
+				if (widget instanceof AbstractButton
+					|| widget instanceof AbstractSliderButton) {
 					int text = mc.font.width(widget.getMessage());
 					if (widget.visible && text > widget.getWidth() - 8) {
 						sb.append("'").append(widget.getMessage().getString()).append("' ").append(text).append("px > ")
@@ -102,6 +140,11 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			recoverPhase(ctx);
 			return;
 		}
+		if (MODE.equals("seekfile")) {
+			ctx.waitForScreen(TitleScreen.class);
+			measureSeeks(ctx, Path.of(System.getProperty("streamerreplay.gametest.replay")));
+			return;
+		}
 		if (MODE.equals("seekbench")) {
 			seekBenchmark(ctx);
 			return;
@@ -109,11 +152,11 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitForScreen(TitleScreen.class);
 		String conflicts = ctx.computeOnClient(mc -> {
 			StringBuilder sb = new StringBuilder();
-			for (net.minecraft.client.KeyMapping ours : mc.options.keyMappings) {
+			for (KeyMapping ours : mc.options.keyMappings) {
 				if (!ours.getName().startsWith("key.streamerreplay.") || ours.isUnbound()) {
 					continue;
 				}
-				for (net.minecraft.client.KeyMapping other : mc.options.keyMappings) {
+				for (KeyMapping other : mc.options.keyMappings) {
 					if (other != ours && other.same(ours)) {
 						sb.append(ours.getName()).append(" = ").append(other.getName()).append("; ");
 					}
@@ -145,7 +188,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			// walk around a bit (server side teleports produce position packets for the recording)
 			for (int i = 0; i < 12; i++) {
 				double angle = i * Math.PI / 6;
-				sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.2f %d %.2f %.1f 10",
+				sp.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.2f %d %.2f %.1f 10",
 					x + Math.cos(angle) * 3, y, z + Math.sin(angle) * 3, (float) Math.toDegrees(angle) + 90));
 				ctx.waitTicks(10);
 				if (i == 6) {
@@ -157,7 +200,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			sp.getServer().runCommand(String.format("setblock %d %d %d minecraft:emerald_block", x, y + 3, z + 3));
 			ctx.waitTicks(40);
 			// the recording switch in the pause menu
-			ctx.runOnClient(mc -> mc.gui.setScreen(new net.minecraft.client.gui.screens.PauseScreen(true)));
+			ctx.runOnClient(mc -> mc.gui.setScreen(new PauseScreen(true)));
 			ctx.waitTicks(5);
 			ctx.takeScreenshot("02c_pause_menu_recording_switch");
 			ctx.runOnClient(mc -> mc.gui.setScreen(null));
@@ -170,9 +213,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			ctx.runOnClient(mc -> RecordingManager.setRecordingEnabled(true));
 			ctx.waitTicks(15);
 			String hint = ctx.computeOnClient(mc -> {
-				var toast = mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.SystemToast.class, dev.robb.streamerreplay.ui.Notifications.RECORDING);
+				var toast = mc.gui.toastManager().getToast(SystemToast.class, Notifications.RECORDING);
 				var why = RecordingManager.notRecordingHint(mc);
-				return (toast == null ? "no toast" : "toast") + " " + (why == null ? "-" : ((net.minecraft.network.chat.contents.TranslatableContents) why.getContents()).getKey());
+				return (toast == null ? "no toast" : "toast") + " " + (why == null ? "-" : ((TranslatableContents) why.getContents()).getKey());
 			});
 			StreamerReplay.LOGGER.info("[gametest] not-recording hint: {}", hint);
 			check(hint.equals("toast streamerreplay.toast.not_recording.rejoin"), "switching recording on mid-session should explain when it starts: " + hint);
@@ -182,12 +225,12 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		Path recorded = waitForReplay(ctx);
 		StreamerReplay.LOGGER.info("[gametest] recorded {}", recorded);
 		check(recorded.getFileName().toString().contains(WORLD_NAME), "file name should keep the world name with umlauts: " + recorded);
-		check(ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().stream()
+		check(ctx.computeOnClient(mc -> ReplayLibrary.scan().stream()
 			.anyMatch(i -> i.meta() != null && WORLD_NAME.equals(i.meta().worldName))), "world name with umlauts should survive in the metadata");
 		// rename to a name full of non-ASCII characters; the rest of the test uses the renamed file
 		Path replay;
 		try {
-			replay = dev.robb.streamerreplay.library.ReplayLibrary.rename(recorded, RENAMED);
+			replay = ReplayLibrary.rename(recorded, RENAMED);
 		} catch (IOException e) {
 			throw new AssertionError(e);
 		}
@@ -200,8 +243,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.takeScreenshot("03_replay_browser");
 		checkLabelsFit(ctx, "browser");
 		ctx.runOnClient(mc -> {
-			var info = dev.robb.streamerreplay.library.ReplayLibrary.scan().getFirst();
-			mc.gui.setScreen(new dev.robb.streamerreplay.ui.RenameReplayScreen(mc.gui.screen(), info, () -> { }));
+			var info = ReplayLibrary.scan().getFirst();
+			mc.gui.setScreen(new RenameReplayScreen(mc.gui.screen(), info, () -> { }));
 		});
 		ctx.waitTicks(5);
 		ctx.takeScreenshot("03b_rename");
@@ -286,7 +329,20 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.takeScreenshot("08_editor_with_path");
 		checkLabelsFit(ctx, "editor");
 		StreamerReplay.LOGGER.info("[gametest] path overlay: {}", (Object) ctx.<String, RuntimeException>computeOnClient(mc ->
-			dev.robb.streamerreplay.render.PathPreviewRenderer.describeProjection(ReplayManager.session(), mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())));
+			PathPreviewRenderer.describeProjection(ReplayManager.session(), mc.getWindow().getGuiScaledWidth(), mc.getWindow().getGuiScaledHeight())));
+		// right-drag over the world turns the camera in the editor
+		float yawBeforeDrag = ctx.computeOnClient(mc -> mc.player.getYRot());
+		ctx.getInput().setCursorPos(300, 200);
+		ctx.waitTicks(1);
+		ctx.getInput().holdMouse(InputConstants.MOUSE_BUTTON_RIGHT);
+		ctx.waitTicks(1);
+		ctx.getInput().moveCursor(80, 0);
+		ctx.waitTicks(1);
+		ctx.getInput().releaseMouse(InputConstants.MOUSE_BUTTON_RIGHT);
+		ctx.waitTicks(2);
+		float yawAfterDrag = ctx.computeOnClient(mc -> mc.player.getYRot());
+		StreamerReplay.LOGGER.info("[gametest] editor right-drag turned the camera by {} degrees", yawAfterDrag - yawBeforeDrag);
+		check(Math.abs(yawAfterDrag - yawBeforeDrag) > 1, "right-drag in the editor should turn the camera");
 		int keyframes = ctx.computeOnClient(mc -> ReplayManager.session().path().size());
 		check(keyframes == 3, "expected 3 keyframes, got " + keyframes);
 
@@ -299,7 +355,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.runOnClient(mc -> {
 			ReplayConfig cfg = ReplayConfig.get();
 			VideoExporter.start(ReplayManager.session(), new ExportSettings(video, cfg.ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, true), true);
-			var progress = new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session()));
+			var progress = new ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session()));
 			mc.gui.setScreen(progress);
 		});
 		ctx.waitTicks(20);
@@ -327,7 +383,11 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		cleanFramesExport(ctx, b);
 		noFfmpegNoPathExport(ctx);
 
-		ctx.runOnClient(mc -> ReplayManager.exit());
+		// leave with a real click on the editor's Exit button (26.3 numbers the left mouse button 1, which the editor
+		// once mistook for the right one and swallowed every left click above its panel)
+		ctx.runOnClient(mc -> mc.gui.setScreen(new ReplayEditorScreen(ReplayManager.session())));
+		ctx.waitTicks(5);
+		clickButton(ctx, "streamerreplay.editor.exit");
 		ctx.waitForScreen(ReplayBrowserScreen.class);
 		ctx.waitTicks(20);
 		ctx.takeScreenshot("12_back_in_browser");
@@ -347,7 +407,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	private static void multiplayer(ClientGameTestContext ctx) {
 		Path folder = ctx.computeOnClient(mc -> StreamerReplay.replayFolder());
 		int before = list(folder, ReplayFormat.EXTENSION).size();
-		java.util.Properties props = new java.util.Properties();
+		long[] netherAt = {0};
+		Properties props = new Properties();
 		props.setProperty("network-compression-threshold", "64");
 		try (TestDedicatedServerContext server = ctx.worldBuilder().createServer(props)) {
 			try (TestDedicatedServerConnection connection = server.connect()) {
@@ -361,12 +422,19 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 				server.runCommand(String.format("summon minecraft:cow %d %d %d", x - 2, y, z + 5));
 				ctx.waitTicks(60);
 				ctx.takeScreenshot("13_multiplayer_recording");
+				// to the Nether and back, so the replay contains dimension switches
+				server.runCommand("gamemode creative @a");
+				netherAt[0] = ctx.computeOnClient(mc -> (long) RecordingManager.active().elapsedMs());
+				server.runCommand("execute in minecraft:the_nether run tp @a 0.5 128 0.5");
+				ctx.waitTicks(60);
+				server.runCommand(String.format("execute in minecraft:overworld run tp @a %d %d %d", x, y, z));
+				ctx.waitTicks(60);
 			}
 		}
 		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == before + 1
 			&& list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 30);
-		Path mp = ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().stream()
-			.filter(i -> i.meta() != null && !i.meta().singleplayer).map(dev.robb.streamerreplay.library.ReplayInfo::file)
+		Path mp = ctx.computeOnClient(mc -> ReplayLibrary.scan().stream()
+			.filter(i -> i.meta() != null && !i.meta().singleplayer).map(ReplayInfo::file)
 			.findFirst().orElse(null));
 		check(mp != null, "multiplayer replay should be listed with singleplayer=false");
 		StreamerReplay.LOGGER.info("[gametest] multiplayer recording {}", mp);
@@ -380,6 +448,20 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			ReplaySession s = ReplayManager.session();
 			return s != null && s.isCaughtUp(mc) && mc.gui.screen() == null;
 		}, 20 * 60);
+		// a dimension switch during normal playback: the camera follows the recorded player into the Nether
+		ctx.runOnClient(mc -> {
+			ReplaySession s = ReplayManager.session();
+			s.clock().setSpeed(1);
+			s.seek(Math.max(0, netherAt[0] - 1500));
+			s.clock().setPlaying(true);
+		});
+		waitOrDump(ctx, "replay reaches the Nether", mc -> mc.level != null && mc.level.dimension() == Level.NETHER, 20 * 30);
+		waitOrDump(ctx, "camera follows the recorded player into the Nether", mc -> {
+			var entity = mc.getCameraEntity();
+			return entity != null && entity != mc.player && entity.getUUID().toString().equals(ReplayManager.session().meta().playerUuid);
+		}, 20 * 10);
+		ctx.takeScreenshot("14a_followed_into_the_nether");
+		StreamerReplay.LOGGER.info("[gametest] dimension switch: the camera follows the recorded player into the Nether");
 		ctx.runOnClient(mc -> {
 			ReplayManager.session().clock().setSpeed(0.1);
 			// 1.5 s of replay at 0.1x leaves 30 game ticks before the end; the checks below need fewer.
@@ -389,11 +471,11 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(4);
 		boolean seesBlocks = ctx.computeOnClient(mc -> {
 			Vec3 p = mc.player.position();
-			var pos = net.minecraft.core.BlockPos.containing(p.x + 4, p.y + 1, p.z + 4);
+			var pos = BlockPos.containing(p.x + 4, p.y + 1, p.z + 4);
 			for (int dx = -10; dx <= 10; dx++) {
 				for (int dz = -10; dz <= 10; dz++) {
 					for (int dy = -6; dy <= 6; dy++) {
-						if (mc.level.getBlockState(pos.offset(dx, dy, dz)).is(net.minecraft.world.level.block.Blocks.REDSTONE_BLOCK)) {
+						if (mc.level.getBlockState(pos.offset(dx, dy, dz)).is(Blocks.REDSTONE_BLOCK)) {
 							return true;
 						}
 					}
@@ -423,10 +505,10 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(ctx.computeOnClient(mc -> RecordingManager.isRecording()), "recording should start automatically");
 		Vec3 p = ctx.computeOnClient(mc -> mc.player.position());
 		sp.getServer().runCommand("time set noon");
-		sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:gold_block",
+		sp.getServer().runCommand(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:gold_block",
 			(int) p.x + 3, (int) p.y, (int) p.z + 3, (int) p.x + 5, (int) p.y + 3, (int) p.z + 5));
 		for (int i = 0; i < 16; i++) {
-			sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 2.5) * 3, p.y, p.z + Math.sin(i / 2.5) * 3, i * 22));
+			sp.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 2.5) * 3, p.y, p.z + Math.sin(i / 2.5) * 3, i * 22));
 			ctx.waitTicks(10);
 			if (i == 8) {
 				ctx.runOnClient(mc -> RecordingManager.addMarker());
@@ -453,12 +535,12 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == 1 && list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 30);
 		Path replay = list(folder, ReplayFormat.EXTENSION).getFirst();
 		StreamerReplay.LOGGER.info("[gametest] recovered file: {}", replay.getFileName());
-		var info = ctx.computeOnClient(mc -> dev.robb.streamerreplay.library.ReplayLibrary.scan().getFirst());
+		var info = ctx.computeOnClient(mc -> ReplayLibrary.scan().getFirst());
 		check(info.meta() != null && CRASH_WORLD.equals(info.meta().worldName), "metadata should survive the crash: " + info.meta());
 		StreamerReplay.LOGGER.info("[gametest] recovered meta: world={} duration={} ms markers={}", info.meta().worldName, info.meta().durationMs, info.markers());
 		check(info.markers() == 1, "the marker set before the crash should survive");
 		try (var leftovers = Files.list(folder)) {
-			java.util.List<String> names = leftovers.map(f -> f.getFileName().toString()).toList();
+			List<String> names = leftovers.map(f -> f.getFileName().toString()).toList();
 			StreamerReplay.LOGGER.info("[gametest] replay folder after recovery: {}", names);
 			check(names.size() == 1, "sidecar files should be cleaned up after recovery: " + names);
 		} catch (IOException e) {
@@ -498,16 +580,24 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 			Vec3 p = ctx.computeOnClient(mc -> mc.player.position());
 			sp.getServer().runCommand("time set noon");
 			for (int i = 0; i < 40; i++) {
-				sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "summon minecraft:%s %.1f %.1f %.1f", i % 2 == 0 ? "sheep" : "chicken",
+				sp.getServer().runCommand(String.format(Locale.ROOT, "summon minecraft:%s %.1f %.1f %.1f", i % 2 == 0 ? "sheep" : "chicken",
 					p.x + (i % 8) * 2 - 8, p.y, p.z + (i / 8) * 2 + 4));
 			}
 			for (int i = 0; i < 90; i++) {
-				sp.getServer().runCommand(String.format(java.util.Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 6.0) * 12, p.y, p.z + Math.sin(i / 6.0) * 12, i * 4));
+				sp.getServer().runCommand(String.format(Locale.ROOT, "tp @a %.2f %.2f %.2f %d 10", p.x + Math.cos(i / 6.0) * 12, p.y, p.z + Math.sin(i / 6.0) * 12, i * 4));
 				ctx.waitTicks(20);
 			}
 		}
 		ctx.waitFor(mc -> list(folder, ReplayFormat.EXTENSION).size() == 1 && list(folder, ReplayFormat.RECORDING_EXTENSION).isEmpty(), 20 * 60);
-		Path replay = list(folder, ReplayFormat.EXTENSION).getFirst();
+		measureSeeks(ctx, list(folder, ReplayFormat.EXTENSION).getFirst());
+	}
+
+	/**
+	 * Opens {@code replay} and measures how long seeks take until everything up to the target is delivered. With
+	 * -PgametestProps=streamerreplay.gametest.mode=seekfile,streamerreplay.gametest.replay=/path/x.sreplay it runs on
+	 * any real recording.
+	 */
+	private static void measureSeeks(ClientGameTestContext ctx, Path replay) {
 		ctx.runOnClient(mc -> ReplayManager.open(replay, new ReplayBrowserScreen(new TitleScreen())));
 		waitOrDump(ctx, "bench replay open", mc -> ReplayManager.session() != null && ReplayManager.session().isCaughtUp(mc) && mc.gui.screen() == null, 20 * 120);
 		double duration = ctx.computeOnClient(mc -> (double) ReplayManager.session().clock().durationMs());
@@ -521,13 +611,13 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		StringBuilder results = new StringBuilder();
 		for (double[] seek : new double[][] {{0.98, 0.9}, {0.98, 0.5}, {0.98, 0.1}, {0.1, 0.98}}) {
 			ctx.runOnClient(mc -> ReplayManager.session().seek(duration * seek[0]));
-			waitCaughtUp(ctx);
+			waitOrDump(ctx, "seek setup", mc -> ReplayManager.session().isCaughtUp(mc), 20 * 600);
 			ctx.waitTicks(5);
 			long start = System.nanoTime();
 			ctx.runOnClient(mc -> ReplayManager.session().seek(duration * seek[1]));
-			waitCaughtUp(ctx);
+			waitOrDump(ctx, "measured seek", mc -> ReplayManager.session().isCaughtUp(mc), 20 * 600);
 			long ms = (System.nanoTime() - start) / 1_000_000;
-			results.append(String.format(java.util.Locale.ROOT, " %d%%->%d%%: %d ms;", (int) (seek[0] * 100), (int) (seek[1] * 100), ms));
+			results.append(String.format(Locale.ROOT, " %d%%->%d%%: %d ms;", (int) (seek[0] * 100), (int) (seek[1] * 100), ms));
 		}
 		StreamerReplay.LOGGER.info("[gametest] SEEK BENCH replay {} s, {} KB:{}",
 			(long) (duration / 1000), size / 1024, results);
@@ -553,19 +643,19 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.waitTicks(3);
 		float yawAfter = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose().yaw());
 		StreamerReplay.LOGGER.info("[gametest] paused mouse look: yaw {} -> {}", yawBefore, yawAfter);
-		check(Math.abs(net.minecraft.util.Mth.wrapDegrees(yawAfter - yawBefore)) > 5, "mouse look should work while paused");
+		check(Math.abs(Mth.wrapDegrees(yawAfter - yawBefore)) > 5, "mouse look should work while paused");
 
 		CameraState before = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose());
 		ctx.getInput().holdKeyFor(o -> o.keyUp, 15);
 		ctx.waitTicks(5);
 		CameraState after = ctx.computeOnClient(mc -> ReplayManager.session().camera().pose());
 		double moved = Math.sqrt(Math.pow(after.x() - before.x(), 2) + Math.pow(after.z() - before.z(), 2));
-		StreamerReplay.LOGGER.info("[gametest] paused flight: moved {} blocks", String.format(java.util.Locale.ROOT, "%.2f", moved));
+		StreamerReplay.LOGGER.info("[gametest] paused flight: moved {} blocks", String.format(Locale.ROOT, "%.2f", moved));
 		check(moved > 1, "W should move the camera while paused (moved " + moved + ")");
 
 		// aim at the pig from above (nothing can stand in between), then a real left click
 		boolean aimed = ctx.computeOnClient(mc -> {
-			net.minecraft.world.entity.Entity pig = findPig(mc);
+			Entity pig = findPig(mc);
 			if (pig == null) {
 				StreamerReplay.LOGGER.error("[gametest] no pig in the replay world");
 				return false;
@@ -582,7 +672,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		});
 		check(aimed, "the recorded pig should exist");
 		ctx.waitTicks(2);
-		ctx.getInput().pressMouse(com.mojang.blaze3d.platform.InputConstants.MOUSE_BUTTON_LEFT);
+		ctx.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 		ctx.waitTicks(5);
 		check(ctx.computeOnClient(mc -> mc.getCameraEntity() == findPig(mc)), "left click should follow the pig while paused");
 		ctx.takeScreenshot("07b_following_entity");
@@ -590,13 +680,13 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		// onboarding toasts are not shown in a replay
 		boolean toastsHidden = ctx.computeOnClient(mc -> {
 			mc.gui.addSocialInteractionsToast();
-			net.minecraft.client.gui.components.toasts.SystemToast.add(mc.gui.toastManager(),
-				net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.UNSECURE_SERVER_WARNING,
-				net.minecraft.network.chat.Component.literal("test"), null);
-			return mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.TutorialToast.class,
-				net.minecraft.client.gui.components.toasts.Toast.NO_TOKEN) == null
-				&& mc.gui.toastManager().getToast(net.minecraft.client.gui.components.toasts.SystemToast.class,
-				net.minecraft.client.gui.components.toasts.SystemToast.SystemToastId.UNSECURE_SERVER_WARNING) == null;
+			SystemToast.add(mc.gui.toastManager(),
+				SystemToast.SystemToastId.UNSECURE_SERVER_WARNING,
+				Component.literal("test"), null);
+			return mc.gui.toastManager().getToast(TutorialToast.class,
+				Toast.NO_TOKEN) == null
+				&& mc.gui.toastManager().getToast(SystemToast.class,
+				SystemToast.SystemToastId.UNSECURE_SERVER_WARNING) == null;
 		});
 		check(toastsHidden, "tutorial / unsecure-server toasts should be suppressed in a replay");
 
@@ -612,9 +702,9 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		ctx.runOnClient(mc -> ReplayManager.session().clock().setPlaying(true));
 	}
 
-	private static net.minecraft.world.entity.@org.jspecify.annotations.Nullable Entity findPig(net.minecraft.client.Minecraft mc) {
-		for (net.minecraft.world.entity.Entity e : mc.level.entitiesForRendering()) {
-			if (e.getType() == net.minecraft.world.entity.EntityTypes.PIG) {
+	private static net.minecraft.world.entity.@Nullable Entity findPig(Minecraft mc) {
+		for (Entity e : mc.level.entitiesForRendering()) {
+			if (e.getType() == EntityTypes.PIG) {
 				return e;
 			}
 		}
@@ -625,7 +715,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	private static String export(ClientGameTestContext ctx, ExportSettings settings, Runnable whileRendering) {
 		ctx.runOnClient(mc -> {
 			VideoExporter.start(ReplayManager.session(), settings, true);
-			mc.gui.setScreen(new dev.robb.streamerreplay.ui.ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session())));
+			mc.gui.setScreen(new ExportProgressScreen(new ReplayEditorScreen(ReplayManager.session())));
 		});
 		ctx.waitTicks(20);
 		whileRendering.run();
@@ -665,8 +755,8 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		StreamerReplay.LOGGER.info("[gametest] ffprobe 1080p: {}", probe);
 		check(probe.startsWith("h264,1920,1080"), "video should be native 1920x1080 H.264: " + probe);
 		// sharpness: a native 1080p frame has much more fine detail than the same frame squeezed through 480p
-		java.awt.image.BufferedImage nativeFrame = frame(video, "1", "");
-		java.awt.image.BufferedImage via480 = frame(video, "1", "scale=854:480,scale=1920:1080");
+		BufferedImage nativeFrame = frame(video, "1", "");
+		BufferedImage via480 = frame(video, "1", "scale=854:480,scale=1920:1080");
 		double sharp = laplacianVariance(nativeFrame);
 		double soft = laplacianVariance(via480);
 		double brightness = meanLuma(nativeFrame);
@@ -675,7 +765,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		check(sharp > soft * 1.3, "the 1080p video should be clearly sharper than an upscaled 480p frame");
 		check(brightness > 40, "the 1080p video should not be dark (sky/fog lost after the world rebuild?)");
 		float sky = ctx.computeOnClient(mc -> mc.gameRenderer.mainCamera().attributeProbe()
-			.getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_COLOR, 0).length());
+			.getValue(EnvironmentAttributes.SKY_COLOR, 0).length());
 		check(sky > 0.1f, "the sky colour must be known again after the export's world rebuild");
 		ctx.getInput().resizeWindow(854, 480);
 		ctx.waitTicks(20);
@@ -716,15 +806,15 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		waitCaughtUp(ctx);
 		ctx.runOnClient(mc -> {
 			key(ReplayManager.session(), shot);
-			mc.debugEntries.setStatus(net.minecraft.client.gui.components.debug.DebugScreenEntries.ENTITY_HITBOXES,
-				net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.ALWAYS_ON);
+			mc.debugEntries.setStatus(DebugScreenEntries.ENTITY_HITBOXES,
+				DebugScreenEntryStatus.ALWAYS_ON);
 		});
 		Path plain = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Overlays on.mp4"));
 		Path clean = ctx.computeOnClient(mc -> StreamerReplay.videoFolder().resolve("Overlays hidden.mp4"));
 		String r1 = export(ctx, new ExportSettings(plain, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, false), () -> { });
 		String r2 = export(ctx, new ExportSettings(clean, ReplayConfig.get().ffmpegPath, 30, ReplayConfig.ExportQuality.FAST, 0, 0, true), () -> { });
-		ctx.runOnClient(mc -> mc.debugEntries.setStatus(net.minecraft.client.gui.components.debug.DebugScreenEntries.ENTITY_HITBOXES,
-			net.minecraft.client.gui.components.debug.DebugScreenEntryStatus.NEVER));
+		ctx.runOnClient(mc -> mc.debugEntries.setStatus(DebugScreenEntries.ENTITY_HITBOXES,
+			DebugScreenEntryStatus.NEVER));
 		check(r1.startsWith("DONE") && r2.startsWith("DONE"), "clean-frame exports failed: " + r1 + " / " + r2);
 		long changed = differingPixels(firstFrame(plain), firstFrame(clean));
 		StreamerReplay.LOGGER.info("[gametest] clean frames: {} pixels differ between overlays on/hidden", changed);
@@ -744,7 +834,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		});
 		waitCaughtUp(ctx);
 		ctx.runOnClient(mc -> mc.gui.setScreen(new ExportScreen(ReplayManager.session(), null)));
-		ctx.waitForScreen(dev.robb.streamerreplay.ui.FfmpegHelpScreen.class);
+		ctx.waitForScreen(FfmpegHelpScreen.class);
 		ctx.waitTicks(10);
 		ctx.takeScreenshot("11b_ffmpeg_help");
 		checkLabelsFit(ctx, "ffmpeg help");
@@ -774,17 +864,17 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		return run("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,width,height", "-of", "csv=p=0", video.toString()).strip();
 	}
 
-	private static java.awt.image.BufferedImage firstFrame(Path video) {
+	private static BufferedImage firstFrame(Path video) {
 		Path png = video.resolveSibling(video.getFileName() + ".frame0.png");
 		run("ffmpeg", "-v", "error", "-y", "-i", video.toString(), "-frames:v", "1", png.toString());
 		try {
-			return javax.imageio.ImageIO.read(png.toFile());
+			return ImageIO.read(png.toFile());
 		} catch (IOException e) {
 			throw new AssertionError(e);
 		}
 	}
 
-	private static long differingPixels(java.awt.image.BufferedImage a, java.awt.image.BufferedImage b) {
+	private static long differingPixels(BufferedImage a, BufferedImage b) {
 		long count = 0;
 		for (int y = 0; y < Math.min(a.getHeight(), b.getHeight()); y++) {
 			for (int x = 0; x < Math.min(a.getWidth(), b.getWidth()); x++) {
@@ -802,7 +892,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	private static String run(String... command) {
 		try {
 			Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-			String out = new String(process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+			String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
 			process.waitFor();
 			return out;
 		} catch (IOException e) {
@@ -813,16 +903,16 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		}
 	}
 
-	private static java.awt.image.BufferedImage frame(Path video, String second, String filter) {
+	private static BufferedImage frame(Path video, String second, String filter) {
 		Path png = video.resolveSibling(video.getFileName() + ".frame" + second + (filter.isEmpty() ? "" : "-filtered") + ".png");
-		java.util.List<String> cmd = new java.util.ArrayList<>(java.util.List.of("ffmpeg", "-v", "error", "-y", "-ss", second, "-i", video.toString(), "-frames:v", "1"));
+		List<String> cmd = new ArrayList<>(List.of("ffmpeg", "-v", "error", "-y", "-ss", second, "-i", video.toString(), "-frames:v", "1"));
 		if (!filter.isEmpty()) {
-			cmd.addAll(java.util.List.of("-vf", filter + ":flags=bicubic"));
+			cmd.addAll(List.of("-vf", filter + ":flags=bicubic"));
 		}
 		cmd.add(png.toString());
 		run(cmd.toArray(String[]::new));
 		try {
-			return javax.imageio.ImageIO.read(png.toFile());
+			return ImageIO.read(png.toFile());
 		} catch (IOException e) {
 			throw new AssertionError(e);
 		}
@@ -832,7 +922,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		return 0.299 * (rgb >> 16 & 255) + 0.587 * (rgb >> 8 & 255) + 0.114 * (rgb & 255);
 	}
 
-	private static double meanLuma(java.awt.image.BufferedImage img) {
+	private static double meanLuma(BufferedImage img) {
 		double sum = 0;
 		for (int y = 0; y < img.getHeight(); y++) {
 			for (int x = 0; x < img.getWidth(); x++) {
@@ -843,7 +933,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 	}
 
 	/** Variance of the 4-neighbour Laplacian: the standard "how much fine detail" measure. */
-	private static double laplacianVariance(java.awt.image.BufferedImage img) {
+	private static double laplacianVariance(BufferedImage img) {
 		double sum = 0;
 		double sumSq = 0;
 		long n = 0;
@@ -871,7 +961,7 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		waitOrDump(ctx, "catch up", mc -> ReplayManager.session() != null && ReplayManager.session().isCaughtUp(mc), 20 * 60);
 	}
 
-	private static void waitOrDump(ClientGameTestContext ctx, String what, java.util.function.Predicate<net.minecraft.client.Minecraft> condition, int timeout) {
+	private static void waitOrDump(ClientGameTestContext ctx, String what, Predicate<Minecraft> condition, int timeout) {
 		try {
 			ctx.waitFor(condition, timeout);
 		} catch (AssertionError e) {
@@ -895,6 +985,25 @@ public final class RecordReplayExportTest implements FabricClientGameTest {
 		} catch (IOException e) {
 			return List.of();
 		}
+	}
+
+	/** A real mouse click on the button whose label has the given translation key, as a player would click it. */
+	private static void clickButton(ClientGameTestContext ctx, String key) {
+		double[] pos = ctx.computeOnClient(mc -> {
+			for (var child : mc.gui.screen().children()) {
+				if (child instanceof AbstractWidget widget
+					&& widget.getMessage().getContents() instanceof TranslatableContents label
+					&& label.getKey().equals(key)) {
+					double scale = mc.getWindow().getGuiScale();
+					return new double[] {(widget.getX() + widget.getWidth() / 2.0) * scale, (widget.getY() + widget.getHeight() / 2.0) * scale};
+				}
+			}
+			return null;
+		});
+		check(pos != null, "no button labelled " + key + " on the current screen");
+		ctx.getInput().setCursorPos(pos[0], pos[1]);
+		ctx.waitTicks(1);
+		ctx.getInput().pressMouse(InputConstants.MOUSE_BUTTON_LEFT);
 	}
 
 	private static void check(boolean condition, String message) {

@@ -1,15 +1,16 @@
 package dev.robb.streamerreplay.util;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import dev.robb.streamerreplay.util.FfmpegLocator.Os;
+import org.junit.jupiter.api.Test;
+
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FfmpegLocatorTest {
 	/** A fake disk: a set of files; folders are implied by the file paths. */

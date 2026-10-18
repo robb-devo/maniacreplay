@@ -1,10 +1,13 @@
 package dev.robb.streamerreplay.mixin;
 
+import com.mojang.renderpearl.api.textures.GpuTextureView;
+import dev.robb.streamerreplay.render.RenderResolution;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.ReplayPauseScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -51,7 +54,7 @@ abstract class MinecraftMixin {
 			}
 			// The level-load tracker is ticked by the game mode, which a paused tick skips: without this a world
 			// rebuild (backward seek) while the replay is paused would stay on the loading screen forever.
-			if (mc.getConnection() != null && mc.gui.screen() instanceof net.minecraft.client.gui.screens.LevelLoadingScreen) {
+			if (mc.getConnection() != null && mc.gui.screen() instanceof LevelLoadingScreen) {
 				mc.getConnection().tick();
 			}
 		}
@@ -68,7 +71,7 @@ abstract class MinecraftMixin {
 	/** While exporting at a fixed resolution, window size changes must not change the render size. */
 	@Inject(method = "resizeGui", at = @At("HEAD"), cancellable = true)
 	private void streamerreplay$keepRenderResolution(CallbackInfo ci) {
-		if (dev.robb.streamerreplay.render.RenderResolution.onResizeGui((Minecraft) (Object) this)) {
+		if (RenderResolution.onResizeGui((Minecraft) (Object) this)) {
 			ci.cancel();
 		}
 	}
@@ -77,8 +80,8 @@ abstract class MinecraftMixin {
 	@ModifyArg(method = "renderFrame", at = @At(value = "INVOKE",
 		target = "Lcom/mojang/renderpearl/api/device/GpuSurface;blitFromTexture(Lcom/mojang/renderpearl/api/commands/CommandEncoder;Lcom/mojang/renderpearl/api/textures/GpuTextureView;)V"),
 		index = 1)
-	private com.mojang.renderpearl.api.textures.GpuTextureView streamerreplay$presentScaled(com.mojang.renderpearl.api.textures.GpuTextureView view) {
-		return dev.robb.streamerreplay.render.RenderResolution.presentView(view);
+	private GpuTextureView streamerreplay$presentScaled(GpuTextureView view) {
+		return RenderResolution.presentView(view);
 	}
 
 	/** Esc in a replay opens the replay menu instead of the vanilla pause menu. */

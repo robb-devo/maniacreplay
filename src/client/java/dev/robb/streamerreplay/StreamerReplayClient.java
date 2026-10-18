@@ -5,6 +5,7 @@ import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.library.RecoveryService;
 import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.record.RecordingManager;
+import dev.robb.streamerreplay.replay.EntityPicker;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.PauseMenuRecordingButton;
 import dev.robb.streamerreplay.ui.TitleScreenButton;
@@ -17,7 +18,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.event.client.player.ClientPreAttackCallback;
-import dev.robb.streamerreplay.replay.EntityPicker;
 
 /** Client entrypoint: wires the modules together. Everything else is event driven and idle until needed. */
 public final class StreamerReplayClient implements ClientModInitializer {

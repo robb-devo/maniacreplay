@@ -1,7 +1,6 @@
 package dev.robb.streamerreplay.ui.widget;
 
 import dev.robb.streamerreplay.format.Marker;
-import org.jspecify.annotations.Nullable;
 import dev.robb.streamerreplay.path.Keyframe;
 import dev.robb.streamerreplay.replay.ReplaySession;
 import dev.robb.streamerreplay.ui.Theme;
@@ -12,7 +11,9 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -173,12 +174,12 @@ public final class TimelineWidget extends AbstractWidget {
 	public void onRelease(MouseButtonEvent event) {
 		if (dragging) {
 			dragging = false;
-			session.seek(timeAt(event.x()));
+			session.scrub(timeAt(event.x()));
 		}
 	}
 
 	@Override
-	public void playDownSound(net.minecraft.client.sounds.SoundManager soundManager) {
+	public void playDownSound(SoundManager soundManager) {
 		// scrubbing should be silent
 	}
 

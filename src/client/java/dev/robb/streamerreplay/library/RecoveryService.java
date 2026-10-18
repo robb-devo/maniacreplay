@@ -30,7 +30,11 @@ public final class RecoveryService {
 		return CompletableFuture.supplyAsync(RecoveryService::recoverAll, RecordingManager.saver());
 	}
 
+	/** A partial archive this old is not being written by anyone; it was left by a game that was killed while saving. */
+	private static final long STALE_PARTIAL_MS = 10 * 60 * 1000L;
+
 	static int recoverAll() {
+		deleteStalePartialArchives();
 		Path activeFile = RecordingManager.activeRecordingFile();
 		int recovered = 0;
 		try (DirectoryStream<Path> files = Files.newDirectoryStream(StreamerReplay.replayFolder(), "*" + ReplayFormat.RECORDING_EXTENSION)) {
@@ -49,6 +53,20 @@ public final class RecoveryService {
 			Notifications.recording(recovered == 1 ? Component.translatable("streamerreplay.toast.recovered.one") : Component.translatable("streamerreplay.toast.recovered", recovered), null);
 		}
 		return recovered;
+	}
+
+	private static void deleteStalePartialArchives() {
+		long cutoff = System.currentTimeMillis() - STALE_PARTIAL_MS;
+		try (DirectoryStream<Path> files = Files.newDirectoryStream(StreamerReplay.replayFolder(), "*" + ReplayFormat.PARTIAL_EXTENSION)) {
+			for (Path partial : files) {
+				if (Files.getLastModifiedTime(partial).toMillis() < cutoff) {
+					Files.deleteIfExists(partial);
+					StreamerReplay.LOGGER.info("Deleted {}, left behind by an interrupted save", partial.getFileName());
+				}
+			}
+		} catch (IOException e) {
+			StreamerReplay.LOGGER.warn("Could not clean up partial archives", e);
+		}
 	}
 
 	private static boolean recover(Path rec) {

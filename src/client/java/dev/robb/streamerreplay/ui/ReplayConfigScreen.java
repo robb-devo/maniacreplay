@@ -20,9 +20,9 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.concurrent.CompletableFuture;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 /** Settings. Few options, each with a tooltip; changes are saved immediately. */
@@ -88,7 +88,7 @@ public final class ReplayConfigScreen extends Screen {
 		y += ROW;
 		addRenderableWidget(CycleButton.<Integer>builder(days -> days == 0
 				? Component.translatable("streamerreplay.config.cleanup.never")
-				: Component.translatable("streamerreplay.config.cleanup.days", days), config.cleanupAfterDays())
+				: Component.translatable("streamerreplay.config.cleanup.days", days), config.cleanupDays)
 			.withValues(ReplayConfig.CLEANUP_CHOICES)
 			.withTooltip(days -> Tooltip.create(Component.translatable("streamerreplay.config.cleanup.tooltip")))
 			.create(left, y, 150, 20, Component.translatable("streamerreplay.config.cleanup"), (b, days) -> {

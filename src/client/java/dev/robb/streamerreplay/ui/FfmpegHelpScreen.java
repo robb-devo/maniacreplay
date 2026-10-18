@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import org.jspecify.annotations.Nullable;
 
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -106,7 +107,7 @@ public final class FfmpegHelpScreen extends Screen {
 		Path folder = FabricLoader.getInstance().getGameDir().resolve("ffmpeg");
 		try {
 			Files.createDirectories(folder);
-		} catch (java.io.IOException ignored) {
+		} catch (IOException ignored) {
 			// opening the game folder still helps
 		}
 		Blaze3D.openPath(Files.isDirectory(folder) ? folder : FabricLoader.getInstance().getGameDir());

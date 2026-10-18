@@ -1,14 +1,13 @@
 package dev.robb.streamerreplay.library;
 
-import dev.robb.streamerreplay.ui.LocalizedIOException;
-
 import dev.robb.streamerreplay.StreamerReplay;
+import dev.robb.streamerreplay.config.ReplayConfig;
+import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.ReplayArchive;
 import dev.robb.streamerreplay.format.ReplayFormat;
-import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.ReplayMeta;
-import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.replay.ReplayManager;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.util.CleanupPolicy;
 import net.minecraft.network.chat.Component;
@@ -124,7 +123,7 @@ public final class ReplayLibrary {
 	 * {@link CleanupPolicy}). Runs on the saver thread, after a recording was saved and once at start-up.
 	 */
 	public static int cleanUp() {
-		int days = ReplayConfig.get().cleanupAfterDays();
+		int days = ReplayConfig.get().cleanupDays;
 		if (days <= 0) {
 			return 0;
 		}

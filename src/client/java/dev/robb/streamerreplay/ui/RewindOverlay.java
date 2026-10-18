@@ -19,10 +19,10 @@ import net.minecraft.resources.Identifier;
  */
 public final class RewindOverlay {
 	private static final Identifier TEXTURE = StreamerReplay.id("rewind_frame");
-	/** How long to wait for the picture before rewinding without it. */
-	private static final long CAPTURE_TIMEOUT_MS = 150;
-	/** Safety net: never hide a stuck loading screen (and its Cancel button) for longer than this. */
-	private static final long MAX_SHOWN_MS = 6000;
+	/** How long to wait for the picture before rewinding without it; the world keeps rendering meanwhile. */
+	private static final long CAPTURE_TIMEOUT_MS = 400;
+	/** Safety net for a rewind that never completes. Long replays legitimately take several seconds per hour. */
+	private static final long MAX_SHOWN_MS = 120_000;
 
 	private static boolean requested;
 	private static long requestedAt;
@@ -68,6 +68,11 @@ public final class RewindOverlay {
 		imageHeight = image.getHeight();
 		mc.getTextureManager().register(TEXTURE, new DynamicTexture(() -> "ManiacReplay rewind frame", image));
 		hasImage = true;
+	}
+
+	/** How long the picture has been shown, 0 if not shown. */
+	public static long shownForMs() {
+		return shownAt < 0 ? 0 : System.currentTimeMillis() - shownAt;
 	}
 
 	public static boolean isShown() {

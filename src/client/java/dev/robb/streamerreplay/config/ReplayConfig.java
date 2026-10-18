@@ -19,7 +19,10 @@ public final class ReplayConfig {
 
 	/** Choices for {@link #cleanupDays}; 0 = keep everything. */
 	public static final List<Integer> CLEANUP_CHOICES = List.of(0, 7, 14, 30, 90);
-	private static final int NEW_INSTALL_CLEANUP_DAYS = 30;
+	/** Written with every save; lower values come from older versions and are upgraded on load. */
+	private static final int CURRENT_VERSION = 2;
+
+	public int configVersion;
 
 	// Recording
 	/** The one switch players care about: record automatically when joining a world (also in the pause menu). */
@@ -29,11 +32,8 @@ public final class ReplayConfig {
 	public boolean showRecordingIndicator = true;
 	/** Server IPs are hidden by default so a replay file can be shared or shown on stream safely. */
 	public boolean storeServerAddress = false;
-	/**
-	 * Delete untouched replays (no markers, not renamed) after this many days; 0 = never. Boxed so that a config
-	 * written by an older version, which never asked about this, is detected and keeps everything.
-	 */
-	public Integer cleanupDays;
+	/** Delete untouched replays (no markers, not renamed) after this many days; 0 = never, the default. */
+	public int cleanupDays;
 
 	// Replay viewer
 	public boolean showControlsHint = true;
@@ -52,11 +52,6 @@ public final class ReplayConfig {
 		return instance;
 	}
 
-	/** Days after which untouched replays are deleted; 0 = never. */
-	public int cleanupAfterDays() {
-		return cleanupDays == null ? 0 : cleanupDays;
-	}
-
 	public static Path file() {
 		return FabricLoader.getInstance().getConfigDir().resolve(StreamerReplay.MOD_ID + ".json");
 	}
@@ -65,17 +60,32 @@ public final class ReplayConfig {
 		Path file = file();
 		if (!Files.exists(file)) {
 			instance = new ReplayConfig();
-			instance.cleanupDays = NEW_INSTALL_CLEANUP_DAYS;
 			instance.save();
 			return;
 		}
 		try {
 			ReplayConfig loaded = GSON.fromJson(Files.readString(file), ReplayConfig.class);
-			instance = loaded != null ? loaded.sanitized() : new ReplayConfig();
+			if (loaded == null) {
+				instance = new ReplayConfig();
+				return;
+			}
+			boolean outdated = loaded.configVersion < CURRENT_VERSION;
+			instance = loaded.upgraded().sanitized();
+			if (outdated) {
+				instance.save();
+			}
 		} catch (IOException | JsonParseException e) {
 			StreamerReplay.LOGGER.warn("Could not read {}, using defaults", file, e);
 			instance = new ReplayConfig();
 		}
+	}
+
+	/** Applies default changes to a config written by an older version. */
+	private ReplayConfig upgraded() {
+		if (configVersion < 2 && cleanupDays == 30) {
+			cleanupDays = 0; // 1.2.0 switched the clean-up on for new installs; it deletes recordings, so it is opt-in now
+		}
+		return this;
 	}
 
 	private ReplayConfig sanitized() {
@@ -91,14 +101,15 @@ public final class ReplayConfig {
 		if (exportResolution == null) {
 			exportResolution = ExportResolution.FULL_HD_1080;
 		}
-		if (cleanupDays == null || !CLEANUP_CHOICES.contains(cleanupDays)) {
-			cleanupDays = 0; // written by a version without clean-up: never delete anything unasked
+		if (!CLEANUP_CHOICES.contains(cleanupDays)) {
+			cleanupDays = 0;
 		}
 		cameraSmoothing = Math.max(0, Math.min(0.95F, cameraSmoothing));
 		return this;
 	}
 
 	public void save() {
+		configVersion = CURRENT_VERSION;
 		Path file = file();
 		try {
 			Files.createDirectories(file.getParent());

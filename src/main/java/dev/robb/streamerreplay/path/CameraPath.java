@@ -171,7 +171,32 @@ public final class CameraPath {
 	public record Sample(double replayTimeMs, CameraState camera) {
 	}
 
-	/** Precomputed splines, rebuilt lazily after edits. */
+	/**
+	 * The path time at which the path shows {@code replayTimeMs}, clamped to the path: the inverse of the replay
+	 * timeline. Where the path holds one moment (a camera move through frozen time), the start of that move.
+	 */
+	public double pathTimeAt(double replayTimeMs) {
+		if (keyframes.isEmpty()) {
+			return 0;
+		}
+		if (replayTimeMs <= keyframes.getFirst().replayTimeMs()) {
+			return keyframes.getFirst().pathTimeMs();
+		}
+		for (int i = 0; i + 1 < keyframes.size(); i++) {
+			Keyframe a = keyframes.get(i);
+			Keyframe b = keyframes.get(i + 1);
+			if (replayTimeMs <= b.replayTimeMs()) {
+				long span = b.replayTimeMs() - a.replayTimeMs();
+				return span <= 0 ? a.pathTimeMs() : a.pathTimeMs() + (b.pathTimeMs() - a.pathTimeMs()) * (replayTimeMs - a.replayTimeMs()) / span;
+			}
+		}
+		return keyframes.getLast().pathTimeMs();
+	}
+
+	/**
+	 * Precomputed splines, rebuilt lazily after edits. Every channel is shape-preserving: the camera never swings past
+	 * where its keyframes put it, however unevenly they are spaced in time.
+	 */
 	private static final class Interpolation {
 		private final HermiteSpline x;
 		private final HermiteSpline y;
@@ -207,13 +232,13 @@ public final class CameraPath {
 				rolls[i] = i == 0 ? c.roll() : AngleMath.unwrapNear(rolls[i - 1], c.roll());
 				fovs[i] = c.fov();
 			}
-			x = new HermiteSpline(times, xs, false);
-			y = new HermiteSpline(times, ys, false);
-			z = new HermiteSpline(times, zs, false);
-			yaw = new HermiteSpline(times, yaws, false);
-			pitch = new HermiteSpline(times, pitches, true);
-			roll = new HermiteSpline(times, rolls, false);
-			fov = new HermiteSpline(times, fovs, true);
+			x = new HermiteSpline(times, xs);
+			y = new HermiteSpline(times, ys);
+			z = new HermiteSpline(times, zs);
+			yaw = new HermiteSpline(times, yaws);
+			pitch = new HermiteSpline(times, pitches);
+			roll = new HermiteSpline(times, rolls);
+			fov = new HermiteSpline(times, fovs);
 		}
 
 		Sample sample(double t) {

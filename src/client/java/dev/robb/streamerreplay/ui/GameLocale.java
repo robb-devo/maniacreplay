@@ -1,7 +1,6 @@
 package dev.robb.streamerreplay.ui;
 
 import dev.robb.streamerreplay.util.TimeFormat;
-
 import net.minecraft.client.Minecraft;
 import net.minecraft.locale.Language;
 

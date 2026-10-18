@@ -3,8 +3,8 @@ package dev.robb.streamerreplay.ui.browser;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.ReplayMeta;
-import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.library.ReplayInfo;
+import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.ui.Theme;
 import dev.robb.streamerreplay.util.TimeFormat;
 import net.minecraft.client.Minecraft;
@@ -15,7 +15,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-
 import org.jspecify.annotations.Nullable;
 
 import java.time.Instant;
@@ -28,8 +27,6 @@ import java.util.function.ObjLongConsumer;
 public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserList.Entry> {
 	static final int THUMB_W = 64;
 	static final int THUMB_H = 36;
-	/** A marker is set after the moment happened ("that was great"), so watching starts a little earlier. */
-	public static final long MARKER_PREROLL_MS = 10_000;
 
 	private ThumbnailCache thumbnails = new ThumbnailCache();
 	private final Consumer<ReplayInfo> onOpen;
@@ -140,7 +137,7 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 				g.text(font, font.plainSubstrByWidth(details, getContentRight() - detailsX), detailsX, y + 25, Theme.TEXT_FAINT, false);
 			}
 			Component badge = info.meta().recovered ? Component.translatable("streamerreplay.browser.recovered")
-				: ReplayConfig.get().cleanupAfterDays() > 0 && info.kept() ? Component.translatable("streamerreplay.browser.kept") : null;
+				: ReplayConfig.get().cleanupDays > 0 && info.kept() ? Component.translatable("streamerreplay.browser.kept") : null;
 			if (badge != null) {
 				g.text(font, badge, getContentRight() - font.width(badge), y + 1, Theme.MARKER, false);
 			}
@@ -167,7 +164,7 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 				g.text(font, label, x + 3, y + 2, hovered ? Theme.TEXT : Theme.MARKER, false);
 				if (hovered) {
 					g.setTooltipForNextFrame(Component.translatable("streamerreplay.browser.marker_chip", marker.name(),
-						TimeFormat.clock(Math.max(0, marker.timeMs() - MARKER_PREROLL_MS))), mouseX, mouseY);
+						TimeFormat.clock(marker.startMs())), mouseX, mouseY);
 				}
 				chips.add(chip);
 				x += w + 3;
@@ -179,7 +176,7 @@ public final class ReplayBrowserList extends ObjectSelectionList<ReplayBrowserLi
 		public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 			for (Chip chip : chips) {
 				if (chip.contains(event.x(), event.y()) && info.readable()) {
-					onOpenAt.accept(info, Math.max(0, chip.marker().timeMs() - MARKER_PREROLL_MS));
+					onOpenAt.accept(info, chip.marker().startMs());
 					return true;
 				}
 			}

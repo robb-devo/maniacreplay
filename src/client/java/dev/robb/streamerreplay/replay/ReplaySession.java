@@ -2,22 +2,24 @@ package dev.robb.streamerreplay.replay;
 
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
-import dev.robb.streamerreplay.input.ReplayKeys;
-import dev.robb.streamerreplay.library.ReplayLibrary;
-import dev.robb.streamerreplay.record.RecordingManager;
-import dev.robb.streamerreplay.render.VideoExporter;
-import dev.robb.streamerreplay.ui.LocalizedIOException;
-import dev.robb.streamerreplay.ui.RewindOverlay;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.format.PacketStreamReader;
 import dev.robb.streamerreplay.format.ReplayArchive;
 import dev.robb.streamerreplay.format.ReplayFormat;
 import dev.robb.streamerreplay.format.ReplayMeta;
+import dev.robb.streamerreplay.input.ReplayKeys;
+import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.path.CameraPath;
 import dev.robb.streamerreplay.path.CameraPathJson;
 import dev.robb.streamerreplay.path.CameraState;
 import dev.robb.streamerreplay.path.Keyframe;
+import dev.robb.streamerreplay.record.RecordingManager;
+import dev.robb.streamerreplay.render.VideoExporter;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.ui.ReplayLoadingScreen;
+import dev.robb.streamerreplay.ui.RewindOverlay;
+import dev.robb.streamerreplay.util.TimeFormat;
+import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.LevelLoadingScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -34,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
 import java.util.zip.ZipFile;
 
 /**
@@ -47,11 +50,13 @@ import java.util.zip.ZipFile;
  */
 public final class ReplaySession {
 	/**
-	 * Per-frame time for delivering packets. Measured (seek benchmark, 93 s busy replay): a 100 ms budget during
-	 * seeks was not faster than 25 ms, because a backward seek is dominated by the fixed reconnect + level-load
-	 * cost (~0.4 s), not by packet delivery (~1.3 ms per replay second). So one budget that keeps the game fluid.
+	 * Per-frame time for delivering packets while the world is visible, small enough to keep the game fluid.
+	 * Delivery costs about 1.6 ms per recorded second (measured on a 46 min singleplayer recording), so a rewind near
+	 * the end of an hour takes several seconds.
 	 */
 	private static final long FAST_FORWARD_BUDGET_NANOS = 25_000_000L;
+	/** While the rewind picture hides the world, frame rate does not matter: spend more of each frame delivering. */
+	private static final long REWIND_BUDGET_NANOS = 80_000_000L;
 	private static final long CATCH_UP_THRESHOLD_MS = 1500;
 	/** ±5 s presses within this time become one jump, so pressing back three times rebuilds the world once. */
 	private static final long NUDGE_SETTLE_NANOS = 300_000_000L;
@@ -71,6 +76,8 @@ public final class ReplaySession {
 	private boolean hasFrame;
 	private long deliveredUntil;
 	private long rewindNotBefore;
+	private long rewindStartedNanos = -1;
+	private final @Nullable UUID recordedPlayer;
 	private boolean closed;
 	private boolean restarting;
 	private @Nullable CameraState restorePose;
@@ -95,7 +102,16 @@ public final class ReplaySession {
 		this.parent = parent;
 		this.clock = new ReplayClock(Math.max(1, meta.durationMs));
 		this.clock.setPlaying(true); // opening a replay starts watching it right away
+		this.recordedPlayer = parseUuid(meta.playerUuid);
 		loadPath();
+	}
+
+	private static @Nullable UUID parseUuid(String text) {
+		try {
+			return text == null || text.isEmpty() ? null : UUID.fromString(text);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	static ReplaySession open(Path file, Screen parent) throws IOException {
@@ -105,7 +121,7 @@ public final class ReplaySession {
 			if (meta.formatVersion > ReplayFormat.FORMAT_VERSION) {
 				throw new LocalizedIOException("streamerreplay.error.newer_format");
 			}
-			int protocol = net.minecraft.SharedConstants.getCurrentVersion().protocolVersion();
+			int protocol = SharedConstants.getCurrentVersion().protocolVersion();
 			if (meta.protocolVersion != 0 && meta.protocolVersion != protocol) {
 				// Packets are stored exactly as the server sent them; another protocol cannot be decoded safely.
 				throw new LocalizedIOException("streamerreplay.error.other_version", meta.minecraftVersion);
@@ -176,8 +192,10 @@ public final class ReplaySession {
 		boolean worldVisible = isInWorld(mc) && !(mc.gui.screen() instanceof LevelLoadingScreen);
 		if (pathPlayer != null) {
 			pathPlayer.update(this, dtSeconds * 1000.0);
-		} else if (worldVisible) {
+		} else if (worldVisible && !isFastForwarding()) {
 			clock.update(now);
+		} else if (worldVisible) {
+			clock.hold(now); // catching up after a jump: arrive exactly at the requested moment, however long it takes
 		} else {
 			// While the world is being built the clock follows the data: it neither runs away nor stalls on the
 			// gap before the next recorded packet (e.g. login at 0 ms, first chunks at 600 ms).
@@ -194,6 +212,11 @@ public final class ReplaySession {
 		deliver((long) Math.floor(clock.timeMs()), pathPlayer != null && pathPlayer.isExact() && !pathPlayer.isWaitingForSeek());
 		if (worldVisible) {
 			enforceSpectator(mc);
+			boolean rebuilding = rewindStartedNanos >= 0; // the world is being rebuilt after a jump; read before it ends below
+			if (rewindStartedNanos >= 0 && isCaughtUp(mc)) {
+				StreamerReplay.LOGGER.info("Rewound to {} in {} ms", TimeFormat.clock((long) clock.timeMs()), (System.nanoTime() - rewindStartedNanos) / 1_000_000);
+				rewindStartedNanos = -1;
+			}
 			if (RewindOverlay.isShown() && isCaughtUp(mc) && mc.levelRenderer.hasRenderedAllSections()) {
 				RewindOverlay.clear(); // the world at the new time is complete
 			}
@@ -209,6 +232,7 @@ public final class ReplaySession {
 					mc.gui.setScreen(screen); // e.g. the editor that was open when seeking backwards
 				}
 			}
+			camera.trackDimension(mc, recordedPlayer, pathPlayer == null && !rebuilding && isCaughtUp(mc));
 			camera.update(mc, dtSeconds);
 			ReplayKeys.handleReplayKeys(mc, this); // per frame: instant response even at very slow speeds
 		}
@@ -216,7 +240,7 @@ public final class ReplaySession {
 
 	/** Delivers all frames up to {@code untilMs}, within a time budget unless {@code exact} is requested. */
 	private void deliver(long untilMs, boolean exact) {
-		long deadline = System.nanoTime() + FAST_FORWARD_BUDGET_NANOS;
+		long deadline = System.nanoTime() + (RewindOverlay.isShown() ? REWIND_BUDGET_NANOS : FAST_FORWARD_BUDGET_NANOS);
 		filter.setSkipEffects(isFastForwarding());
 		try {
 			while (hasFrame && reader.time() <= untilMs) {
@@ -255,6 +279,7 @@ public final class ReplaySession {
 	private void restart() {
 		Minecraft mc = Minecraft.getInstance();
 		restarting = true;
+		rewindStartedNanos = System.nanoTime();
 		try {
 			if (camera.isInitialized()) {
 				restorePose = camera.pose();
@@ -406,8 +431,21 @@ public final class ReplaySession {
 
 	/** Relative jump for the ±5 s keys and buttons; presses in quick succession are rebuilt as one jump. */
 	public void nudge(double deltaMs) {
-		seek(clock.timeMs() + deltaMs);
+		if (pathPlayer != null && !pathPlayer.isExact()) {
+			pathPlayer.jumpTo(this, pathPlayer.pathTime() + deltaMs); // a running preview moves along its path
+		} else {
+			seek(clock.timeMs() + deltaMs);
+		}
 		rewindNotBefore = System.nanoTime() + NUDGE_SETTLE_NANOS;
+	}
+
+	/** Timeline released at {@code timeMs}: a running path preview continues from there, otherwise a normal seek. */
+	public void scrub(double timeMs) {
+		if (pathPlayer != null && !pathPlayer.isExact()) {
+			pathPlayer.jumpToReplayTime(this, timeMs);
+		} else {
+			seek(timeMs);
+		}
 	}
 
 	/** Starts playing the camera path in real time (preview). */

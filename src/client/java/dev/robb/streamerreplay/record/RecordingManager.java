@@ -1,7 +1,5 @@
 package dev.robb.streamerreplay.record;
 
-import dev.robb.streamerreplay.ui.LocalizedIOException;
-
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.Marker;
@@ -10,6 +8,7 @@ import dev.robb.streamerreplay.format.ReplayFormat;
 import dev.robb.streamerreplay.format.ReplayMeta;
 import dev.robb.streamerreplay.library.ReplayLibrary;
 import dev.robb.streamerreplay.replay.ReplayManager;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.hud.RecordingIndicatorHud;
 import dev.robb.streamerreplay.util.TimeFormat;
@@ -29,6 +28,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Owns the (at most one) active {@link Recorder}: starts it when a connection finishes logging in, ticks it,
@@ -89,9 +89,6 @@ public final class RecordingManager {
 			recorder.attach();
 			active = recorder;
 			StreamerReplay.LOGGER.info("Recording started: {}", recording.getFileName());
-			if (config.showRecordingIndicator) {
-				Notifications.recording(Component.translatable("streamerreplay.toast.recording_started"), Component.literal(meta.worldName));
-			}
 		} catch (IOException e) {
 			StreamerReplay.LOGGER.error("Could not start recording", e);
 			Notifications.recording(Component.translatable("streamerreplay.toast.recording_failed"), LocalizedIOException.describe(e));
@@ -247,7 +244,7 @@ public final class RecordingManager {
 		stopActive();
 		SAVER.shutdown();
 		try {
-			if (!SAVER.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS)) {
+			if (!SAVER.awaitTermination(15, TimeUnit.SECONDS)) {
 				StreamerReplay.LOGGER.warn("Replay is still being saved; it will be recovered on next start if incomplete");
 			}
 		} catch (InterruptedException e) {

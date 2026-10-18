@@ -1,6 +1,5 @@
 package dev.robb.streamerreplay.ui.hud;
 
-import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.format.Marker;
 import dev.robb.streamerreplay.input.ReplayKeys;
@@ -8,6 +7,7 @@ import dev.robb.streamerreplay.render.VideoExporter;
 import dev.robb.streamerreplay.replay.ReplayCamera;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
+import dev.robb.streamerreplay.ui.GameLocale;
 import dev.robb.streamerreplay.ui.RewindOverlay;
 import dev.robb.streamerreplay.ui.Theme;
 import dev.robb.streamerreplay.ui.widget.TimelineWidget;
@@ -20,6 +20,8 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.Entity;
+
+import java.util.List;
 
 /** Minimal in-world overlay while watching a replay without the editor open. */
 public final class ReplayHud implements HudElement {
@@ -157,7 +159,7 @@ public final class ReplayHud implements HudElement {
 			ReplayKeys.SEEK_BACK.getTranslatedKeyMessage(),
 			ReplayKeys.SEEK_FORWARD.getTranslatedKeyMessage());
 		// long key names ("Left Arrow") or translations wrap onto a second line instead of running off screen
-		java.util.List<FormattedCharSequence> lines = font.split(hint, width - 24);
+		List<FormattedCharSequence> lines = font.split(hint, width - 24);
 		int hw = 0;
 		for (FormattedCharSequence line : lines) {
 			hw = Math.max(hw, font.width(line));

@@ -2,8 +2,12 @@ package dev.robb.streamerreplay.ui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
+import net.minecraft.client.gui.screens.LoadingOverlay;
 import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.Nullable;
+
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /** Small toast helper. Safe to call from any thread. */
 public final class Notifications {
@@ -22,7 +26,7 @@ public final class Notifications {
 	}
 
 	/** Toasts that arrived while the game was still loading its resources (see {@link #tick}). */
-	private static final java.util.Queue<Runnable> PENDING = new java.util.concurrent.ConcurrentLinkedQueue<>();
+	private static final Queue<Runnable> PENDING = new ConcurrentLinkedQueue<>();
 
 	private static void show(SystemToast.SystemToastId id, Component title, @Nullable Component message) {
 		// A toast lays out its text when it is created, so one created during the start-up resource load would
@@ -34,7 +38,7 @@ public final class Notifications {
 
 	/** Render thread: shows queued toasts once no resource reload is running. Also called every client tick. */
 	public static void tick(Minecraft mc) {
-		if (mc.gui.overlay() instanceof net.minecraft.client.gui.screens.LoadingOverlay) {
+		if (mc.gui.overlay() instanceof LoadingOverlay) {
 			return;
 		}
 		for (Runnable toast; (toast = PENDING.poll()) != null; ) {

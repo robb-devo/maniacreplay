@@ -1,11 +1,13 @@
 package dev.robb.streamerreplay.render;
 
-import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.StreamerReplay;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -166,7 +168,7 @@ public final class FfmpegEncoder implements FrameSink {
 
 	private String lastLogLine() {
 		try {
-			java.util.List<String> lines = new String(java.nio.file.Files.readAllBytes(logFile), java.nio.charset.StandardCharsets.UTF_8).lines().toList();
+			List<String> lines = new String(Files.readAllBytes(logFile), StandardCharsets.UTF_8).lines().toList();
 			for (int i = lines.size() - 1; i >= 0; i--) {
 				String line = lines.get(i).strip();
 				if (!line.isEmpty()) {

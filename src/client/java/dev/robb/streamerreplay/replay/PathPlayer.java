@@ -66,6 +66,22 @@ public final class PathPlayer {
 		}
 	}
 
+	/** Moves to {@code newPathTime} (clamped) and continues from there once the replay has caught up. */
+	void jumpTo(ReplaySession session, double newPathTime) {
+		double start = path.startPathTime();
+		pathTime = Math.max(start, Math.min(start + path.durationMs(), newPathTime));
+		finished = false;
+		CameraPath.Sample sample = path.sample(pathTime);
+		session.clock().setTime(sample.replayTimeMs());
+		session.camera().setPathPose(sample.camera());
+		waitingForSeek = true;
+	}
+
+	/** Moves to the moment where the path shows {@code replayTimeMs}, e.g. when the timeline is scrubbed. */
+	void jumpToReplayTime(ReplaySession session, double replayTimeMs) {
+		jumpTo(session, path.pathTimeAt(replayTimeMs));
+	}
+
 	public boolean isWaitingForSeek() {
 		return waitingForSeek;
 	}

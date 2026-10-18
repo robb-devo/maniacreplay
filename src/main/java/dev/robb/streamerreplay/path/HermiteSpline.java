@@ -1,27 +1,28 @@
 package dev.robb.streamerreplay.path;
 
 /**
- * Non-uniform cubic Hermite spline with Catmull-Rom style tangents.
+ * Shape-preserving cubic Hermite spline over unevenly spaced keys.
  *
- * <p>Tangents are the time-weighted average of the neighbouring secant slopes, which gives smooth (C1)
- * motion even when keyframes are unevenly spaced in time. End points use one-sided slopes. Optionally the
- * tangents are limited (Fritsch-Carlson) to avoid overshoot, which is what we want for FOV.
+ * <p>Tangents start as the time-weighted average of the neighbouring secant slopes and are then limited
+ * (Fritsch-Carlson): flat at local extrema, and never so steep that a segment leaves the range of its two keys. The
+ * result is smooth (C1) and never overshoots. Without the limit, keys spaced 2 s and then 5 min apart made a camera
+ * path swing tens of blocks past its keyframes.
  */
 public final class HermiteSpline {
 	private final double[] times;
 	private final double[] values;
 	private final double[] tangents;
 
-	public HermiteSpline(double[] times, double[] values, boolean monotone) {
+	public HermiteSpline(double[] times, double[] values) {
 		if (times.length != values.length || times.length == 0) {
 			throw new IllegalArgumentException("times and values must be non-empty and of equal length");
 		}
 		this.times = times.clone();
 		this.values = values.clone();
-		this.tangents = computeTangents(this.times, this.values, monotone);
+		this.tangents = computeTangents(this.times, this.values);
 	}
 
-	private static double[] computeTangents(double[] t, double[] v, boolean monotone) {
+	private static double[] computeTangents(double[] t, double[] v) {
 		int n = t.length;
 		double[] m = new double[n];
 		if (n == 1) {
@@ -40,26 +41,24 @@ public final class HermiteSpline {
 			double total = dtPrev + dtNext;
 			m[i] = total <= 0 ? 0 : (secant[i - 1] * dtNext + secant[i] * dtPrev) / total;
 		}
-		if (monotone) {
-			// Fritsch-Carlson: flat at local extrema, then limit the slopes so that no segment overshoots.
-			for (int i = 1; i < n - 1; i++) {
-				if (secant[i - 1] * secant[i] <= 0) {
-					m[i] = 0;
-				}
+		// Fritsch-Carlson: flat at local extrema, then limit the slopes so that no segment overshoots.
+		for (int i = 1; i < n - 1; i++) {
+			if (secant[i - 1] * secant[i] <= 0) {
+				m[i] = 0;
 			}
-			for (int i = 0; i < n - 1; i++) {
-				if (secant[i] == 0) {
-					m[i] = 0;
-					m[i + 1] = 0;
-				} else {
-					double a = m[i] / secant[i];
-					double b = m[i + 1] / secant[i];
-					double s = a * a + b * b;
-					if (s > 9) {
-						double tau = 3 / Math.sqrt(s);
-						m[i] = tau * a * secant[i];
-						m[i + 1] = tau * b * secant[i];
-					}
+		}
+		for (int i = 0; i < n - 1; i++) {
+			if (secant[i] == 0) {
+				m[i] = 0;
+				m[i + 1] = 0;
+			} else {
+				double a = m[i] / secant[i];
+				double b = m[i + 1] / secant[i];
+				double s = a * a + b * b;
+				if (s > 9) {
+					double tau = 3 / Math.sqrt(s);
+					m[i] = tau * a * secant[i];
+					m[i + 1] = tau * b * secant[i];
 				}
 			}
 		}

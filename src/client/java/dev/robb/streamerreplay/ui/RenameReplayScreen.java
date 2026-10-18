@@ -1,5 +1,6 @@
 package dev.robb.streamerreplay.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.library.ReplayInfo;
 import dev.robb.streamerreplay.library.ReplayLibrary;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -7,7 +8,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 

@@ -1,19 +1,19 @@
 package dev.robb.streamerreplay.render;
 
-import net.minecraft.network.chat.Component;
-
-import dev.robb.streamerreplay.ui.LocalizedIOException;
-
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.textures.GpuTexture;
 import dev.robb.streamerreplay.StreamerReplay;
+import dev.robb.streamerreplay.path.CameraPath;
 import dev.robb.streamerreplay.replay.PathPlayer;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
@@ -71,7 +71,7 @@ public final class VideoExporter {
 	private long settleStart;
 	private int settleFrames;
 
-	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, dev.robb.streamerreplay.path.CameraPath path) {
+	private VideoExporter(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, CameraPath path) {
 		this.pngSequence = pngSequence;
 		this.session = session;
 		this.settings = withRenderSize(settings);
@@ -89,7 +89,7 @@ public final class VideoExporter {
 		int w = s.outputWidth();
 		int h = s.outputHeight();
 		if (w <= 0 || h <= 0) {
-			com.mojang.blaze3d.platform.Window.FramebufferSize real = Minecraft.getInstance().getWindow().queryFramebufferSize();
+			Window.FramebufferSize real = Minecraft.getInstance().getWindow().queryFramebufferSize();
 			w = Math.max(2, real.width() & ~1);
 			h = Math.max(2, real.height() & ~1);
 		}
@@ -118,7 +118,7 @@ public final class VideoExporter {
 	}
 
 	/** {@code path}: the camera path to render, e.g. a fixed shot when the user has no path yet. */
-	public static VideoExporter start(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, dev.robb.streamerreplay.path.CameraPath path) {
+	public static VideoExporter start(ReplaySession session, ExportSettings settings, boolean x264, boolean pngSequence, CameraPath path) {
 		cancel();
 		VideoExporter exporter = new VideoExporter(session, settings, x264, pngSequence, path);
 		active = exporter;

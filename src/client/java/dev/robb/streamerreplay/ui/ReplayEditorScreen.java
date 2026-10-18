@@ -1,8 +1,9 @@
 package dev.robb.streamerreplay.ui;
 
-import dev.robb.streamerreplay.render.PathPreviewRenderer;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.input.ReplayKeys;
 import dev.robb.streamerreplay.path.CameraPath;
+import dev.robb.streamerreplay.render.PathPreviewRenderer;
 import dev.robb.streamerreplay.replay.CameraControlScreen;
 import dev.robb.streamerreplay.replay.ReplayManager;
 import dev.robb.streamerreplay.replay.ReplaySession;
@@ -10,10 +11,10 @@ import dev.robb.streamerreplay.ui.hud.ReplayHud;
 import dev.robb.streamerreplay.ui.widget.TimelineWidget;
 import dev.robb.streamerreplay.ui.widget.ValueSlider;
 import dev.robb.streamerreplay.util.TimeFormat;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -199,6 +200,8 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 			selected = path.size() - 1;
 		}
 		removeButton.active = selected >= 0;
+		fovSlider.active = !session.isPlayingPath(); // a playing path sets FOV and roll itself
+		rollSlider.active = !session.isPlayingPath();
 		updateButton.active = selected >= 0;
 		prevButton.active = !path.isEmpty() && selected != 0;
 		nextButton.active = !path.isEmpty() && selected < path.size() - 1;
@@ -225,7 +228,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		if (getFocused() instanceof net.minecraft.client.gui.components.EditBox) {
+		if (getFocused() instanceof EditBox) {
 			return super.keyPressed(event);
 		}
 		if (ReplayKeys.EDITOR.matches(event)) {
@@ -257,7 +260,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (event.button() == 1 && event.y() < height - PANEL_HEIGHT) {
+		if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT && event.y() < height - PANEL_HEIGHT) {
 			looking = true;
 			return true;
 		}
@@ -266,7 +269,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-		if (looking && event.button() == 1 && minecraft.player != null && !session.isPlayingPath()) {
+		if (looking && event.button() == InputConstants.MOUSE_BUTTON_RIGHT && minecraft.player != null && !session.isPlayingPath()) {
 			double sensitivity = minecraft.options.sensitivity().get() * LOOK_SENSITIVITY + 0.2;
 			// same curve as vanilla's MouseHandler; drag deltas are in GUI pixels, so scale back to screen pixels
 			double factor = sensitivity * sensitivity * sensitivity * 8.0 * minecraft.getWindow().getGuiScale();
@@ -278,7 +281,7 @@ public final class ReplayEditorScreen extends Screen implements CameraControlScr
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
-		if (event.button() == 1) {
+		if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
 			looking = false;
 		}
 		return super.mouseReleased(event);

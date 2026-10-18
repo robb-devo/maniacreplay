@@ -1,15 +1,17 @@
 package dev.robb.streamerreplay.replay;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.robb.streamerreplay.config.ReplayConfig;
 import dev.robb.streamerreplay.path.CameraState;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
@@ -37,6 +39,7 @@ public final class ReplayCamera {
 	private @Nullable CameraState pathPose;
 	private boolean initialized;
 	private @Nullable UUID followUuid;
+	private @Nullable ResourceKey<Level> dimension;
 
 	/** Places the camera at the eyes of the given entity (on spawn and when leaving spectate mode). */
 	public void moveTo(Entity entity) {
@@ -154,6 +157,31 @@ public final class ReplayCamera {
 				mc.setCameraEntity(entity);
 				return;
 			}
+		}
+	}
+
+	/**
+	 * Called every frame. When the world switches to another dimension during normal playback (the recorded player
+	 * went through a portal or respawned elsewhere), the camera would be left at the old coordinates inside the new
+	 * world, and any entity it followed is gone. So it follows the recorded player instead; Shift returns to the free
+	 * camera as usual. Switches replayed while rebuilding the world after a jump, or while a camera path plays, only
+	 * update the dimension, so the camera stays where the user put it.
+	 */
+	void trackDimension(Minecraft mc, @Nullable UUID recordedPlayer, boolean normalPlayback) {
+		if (mc.level == null) {
+			return;
+		}
+		ResourceKey<Level> current = mc.level.dimension();
+		if (current.equals(dimension)) {
+			return;
+		}
+		boolean switched = dimension != null;
+		dimension = current;
+		if (switched && normalPlayback && recordedPlayer != null && pathPose == null) {
+			if (isSpectatingOther(mc) && mc.player != null) {
+				mc.setCameraEntity(mc.player); // the followed entity stayed behind in the old dimension
+			}
+			followUuid = recordedPlayer; // reacquireFollowTarget attaches as soon as the player appears in the new world
 		}
 	}
 

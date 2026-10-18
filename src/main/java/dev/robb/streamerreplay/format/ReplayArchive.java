@@ -33,16 +33,21 @@ public final class ReplayArchive {
 	 * (no re-compression), so this is I/O bound and fast. On success the {@code .rec} file is deleted.
 	 */
 	public static void finish(Path recording, Path target, ReplayMeta meta, List<Marker> markers, byte[] thumbnailPng) throws IOException {
-		Path temp = target.resolveSibling(target.getFileName() + ".tmp");
-		try (OutputStream fileOut = Files.newOutputStream(temp); ZipOutputStream zip = new ZipOutputStream(fileOut)) {
-			putDeflated(zip, ReplayFormat.ENTRY_META, GSON.toJson(meta).getBytes(StandardCharsets.UTF_8));
-			putDeflated(zip, ReplayFormat.ENTRY_MARKERS, GSON.toJson(sorted(markers)).getBytes(StandardCharsets.UTF_8));
-			if (thumbnailPng != null && thumbnailPng.length > 0) {
-				putStored(zip, ReplayFormat.ENTRY_THUMBNAIL, thumbnailPng);
+		Path temp = target.resolveSibling(target.getFileName() + ".tmp"); // name.sreplay.tmp, see ReplayFormat.PARTIAL_EXTENSION
+		try {
+			try (OutputStream fileOut = Files.newOutputStream(temp); ZipOutputStream zip = new ZipOutputStream(fileOut)) {
+				putDeflated(zip, ReplayFormat.ENTRY_META, GSON.toJson(meta).getBytes(StandardCharsets.UTF_8));
+				putDeflated(zip, ReplayFormat.ENTRY_MARKERS, GSON.toJson(sorted(markers)).getBytes(StandardCharsets.UTF_8));
+				if (thumbnailPng != null && thumbnailPng.length > 0) {
+					putStored(zip, ReplayFormat.ENTRY_THUMBNAIL, thumbnailPng);
+				}
+				putStoredFile(zip, ReplayFormat.ENTRY_PACKETS, recording);
 			}
-			putStoredFile(zip, ReplayFormat.ENTRY_PACKETS, recording);
+			Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+		} catch (IOException | RuntimeException e) {
+			Files.deleteIfExists(temp); // the recording itself is untouched and can be packaged again
+			throw e;
 		}
-		Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 		Files.deleteIfExists(recording);
 	}
 

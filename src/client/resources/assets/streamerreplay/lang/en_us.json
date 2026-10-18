@@ -6,7 +6,6 @@
   "key.streamerreplay.keyframe": "Replay: Add Camera Keyframe",
   "key.streamerreplay.seek_back": "Replay: Back 5 Seconds",
   "key.streamerreplay.seek_forward": "Replay: Forward 5 Seconds",
-  "streamerreplay.toast.recording_started": "Recording",
   "streamerreplay.toast.recording_failed": "Recording failed",
   "streamerreplay.toast.replay_saved": "Replay saved",
   "streamerreplay.toast.save_failed": "Could not save replay",

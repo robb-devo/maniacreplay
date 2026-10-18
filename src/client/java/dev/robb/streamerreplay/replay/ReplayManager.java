@@ -1,10 +1,9 @@
 package dev.robb.streamerreplay.replay;
 
-import dev.robb.streamerreplay.ui.LocalizedIOException;
-
 import dev.robb.streamerreplay.StreamerReplay;
 import dev.robb.streamerreplay.record.RecordingManager;
 import dev.robb.streamerreplay.render.VideoExporter;
+import dev.robb.streamerreplay.ui.LocalizedIOException;
 import dev.robb.streamerreplay.ui.Notifications;
 import dev.robb.streamerreplay.ui.ReplayBrowserScreen;
 import io.netty.channel.Channel;

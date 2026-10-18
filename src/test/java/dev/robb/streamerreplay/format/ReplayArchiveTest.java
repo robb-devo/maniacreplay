@@ -13,6 +13,15 @@ import java.util.zip.ZipFile;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReplayArchiveTest {
+	@Test
+	void failedFinishLeavesNoPartialArchive() {
+		Path missing = dir.resolve("gone" + ReplayFormat.RECORDING_EXTENSION);
+		Path target = dir.resolve("gone" + ReplayFormat.EXTENSION);
+		assertThrows(IOException.class, () -> ReplayArchive.finish(missing, target, new ReplayMeta(), List.of(), null));
+		assertFalse(Files.exists(target));
+		assertFalse(Files.exists(dir.resolve("gone" + ReplayFormat.PARTIAL_EXTENSION)));
+	}
+
 	@TempDir
 	Path dir;
 

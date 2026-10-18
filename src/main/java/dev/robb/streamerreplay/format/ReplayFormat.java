@@ -27,6 +27,8 @@ public final class ReplayFormat {
 	public static final String MARKERS_SIDECAR_EXTENSION = ".sreplay.markers";
 	public static final String THUMB_SIDECAR_EXTENSION = ".sreplay.thumb";
 	public static final String META_SIDECAR_EXTENSION = ".sreplay.meta";
+	/** An archive while it is being written; renamed to {@link #EXTENSION} when complete. */
+	public static final String PARTIAL_EXTENSION = ".sreplay.tmp";
 	/** Appended to the full replay file name: {@code name.sreplay.paths}. */
 	public static final String PATHS_SIDECAR_EXTENSION = ".paths";
 
